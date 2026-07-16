@@ -10,6 +10,14 @@ tenant:
     logo_text: Northwind Mobile
     support_hours: "24/7"
     voice: friendly-direct
+  config_json:
+    # Resolves bare national numbers (07700900000) to E.164 at the gx boundary.
+    country: GB
+    # Shape of masked_name in the verify-customer response.
+    masked_name:
+      reveal_chars: 1
+      mask_char: "*"
+      mask_length: 3          # fixed run, so the real name length is not leaked
 
 seed:
   faker_seed: 20260716        # fixed → deterministic re-seed
@@ -18,7 +26,11 @@ seed:
   party_type: person
   tiers: [bronze, silver, gold]
   identities: [phone, email, account_no]
-  verification_factor: dob
+  # One factor per party, stored only as a hash. A known value (rather than BE-0's
+  # random Faker dob) so a demo and the gx verify happy path can actually assert it.
+  verification:
+    factor_type: pin
+    value_pattern: "1234"
   contact_channels: [sms, email]
   # Ofcom reserves +447700900xxx for fiction: no seeded number can reach a real person.
   phone_pattern: "+447700900{index:03d}"

@@ -1,0 +1,92 @@
+{
+  "name": "Backlot - Get Customer Context",
+  "integrationType": "custom-rest-actions",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/customer-context?identifier=${input.identifier}",
+      "requestType": "GET",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}",
+        "X-Tenant": "${input.tenant}"
+      },
+      "requestTemplate": "${input.rawRequest}"
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - Get Customer Context input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
+          },
+          "tenant": {
+            "type": "string",
+            "description": "Tenant slug. Leave empty to use the API's default tenant."
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "CustomerContextOut output",
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "description": "False when the identifier resolves to no subscriber."
+          },
+          "party_id": {
+            "type": "string",
+            "description": "Empty when not found."
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "tenant_slug": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Always false here; verification is a separate verify-customer call."
+          },
+          "last_channel": {
+            "type": "string"
+          },
+          "id_type_resolved": {
+            "type": "string",
+            "description": "phone | email | account_no | msisdn | unrecognized"
+          }
+        },
+        "required": [
+          "display_name",
+          "found",
+          "id_type_resolved",
+          "last_channel",
+          "party_id",
+          "tenant_slug",
+          "tier",
+          "verified"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

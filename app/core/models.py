@@ -19,6 +19,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -44,6 +45,11 @@ class Tenant(Base):
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
     industry: Mapped[str] = mapped_column(String(64), nullable=False)
     branding_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # Behavioural tenant config (country, masked_name format, ...). Deliberately a
+    # JSONB bag: new tenant config is a pack edit, not a migration.
+    config_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

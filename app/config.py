@@ -21,6 +21,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://backlot:backlot@db:5432/backlot"
 
+    # Base URL baked into exported Genesys data-action contracts. Locked public URL.
+    gx_base_url: str = "https://backlot-api.krishharness.com"
+
     log_level: str = "INFO"
 
 

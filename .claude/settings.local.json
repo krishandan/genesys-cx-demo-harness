@@ -33,7 +33,8 @@
       "Bash(python3 -c ' *)",
       "Bash(make seed *)",
       "Bash(git commit *)",
-      "Bash(git commit -q -m 'BE-1 housekeeping: convert seed packs from JSON to YAML *)"
+      "Bash(git commit -q -m 'BE-1 housekeeping: convert seed packs from JSON to YAML *)",
+      "Bash(.venv/bin/pytest tests/test_gx_normalize.py)"
     ]
   }
 }

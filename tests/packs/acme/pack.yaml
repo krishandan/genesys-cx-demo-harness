@@ -5,6 +5,12 @@ tenant:
   industry: telco
   branding_json:
     primary_color: "#FF6B00"
+  config_json:
+    country: GB
+    masked_name:
+      reveal_chars: 1
+      mask_char: "*"
+      mask_length: 3
 
 seed:
   faker_seed: 999
@@ -13,7 +19,9 @@ seed:
   party_type: person
   tiers: [bronze]
   identities: [phone, email]
-  verification_factor: pin
+  verification:
+    factor_type: pin
+    value_pattern: "9{index:03d}"
   contact_channels: [sms]
   phone_pattern: "+447700901{index:03d}"
   email_domain: example.org

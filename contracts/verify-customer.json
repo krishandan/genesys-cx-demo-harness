@@ -1,0 +1,79 @@
+{
+  "name": "Backlot - Verify Customer",
+  "integrationType": "custom-rest-actions",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/verify-customer",
+      "requestType": "POST",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}",
+        "X-Tenant": "${input.tenant}",
+        "Content-Type": "application/json"
+      },
+      "requestTemplate": "{\"identifier\": \"${input.identifier}\",\"factor_type\": \"${input.factor_type}\",\"factor_value\": \"${input.factor_value}\"}"
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - Verify Customer input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Identifier of the subscriber to verify."
+          },
+          "factor_type": {
+            "type": "string",
+            "description": "Factor to check: dob | zip | pin | last4."
+          },
+          "factor_value": {
+            "type": "string",
+            "description": "The value the caller supplied. Compared as a hash."
+          },
+          "tenant": {
+            "type": "string",
+            "description": "Tenant slug. Leave empty to use the API's default tenant."
+          }
+        },
+        "required": [
+          "factor_type",
+          "factor_value",
+          "identifier"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "VerifyCustomerOut output",
+        "type": "object",
+        "properties": {
+          "verified": {
+            "type": "boolean"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "masked_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "masked_name",
+          "party_id",
+          "verified"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

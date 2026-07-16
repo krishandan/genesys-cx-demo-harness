@@ -1,4 +1,4 @@
-.PHONY: help up down logs build seed migrate revision test lint typecheck check demo fmt venv
+.PHONY: help up down logs build seed migrate revision test lint typecheck check demo demo-be1 contracts fmt venv
 
 ENV_FILE := .env
 POSTGRES_DATA_PATH ?= ./.data/postgres
@@ -48,8 +48,14 @@ typecheck: ## mypy
 
 check: lint typecheck test ## The phase gate's static+test leg
 
+contracts: ## Regenerate the Genesys data-action contracts into contracts/
+	.venv/bin/python -m app.gx.contracts
+
 demo: ## Run the BE-0 curl walkthrough
 	./scripts/demo_be0.sh
+
+demo-be1: ## Run the BE-1 gx walkthrough
+	./scripts/demo_be1.sh
 
 venv: ## Create the host venv used by test/lint/typecheck
 	uv venv --python 3.12 .venv
