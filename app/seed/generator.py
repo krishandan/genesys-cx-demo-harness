@@ -7,12 +7,12 @@ Re-running therefore merges onto the same rows instead of duplicating them.
 
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
 from faker import Faker
 from sqlalchemy.orm import Session
 
@@ -50,14 +50,14 @@ class SeedResult:
 
 
 def load_pack(tenant_slug: str, packs_dir: Path = PACKS_DIR) -> dict[str, Any]:
-    pack_path = packs_dir / tenant_slug / "pack.json"
+    pack_path = packs_dir / tenant_slug / "pack.yaml"
     if not pack_path.exists():
         raise PackNotFoundError(
             f"No seed pack for tenant '{tenant_slug}' at {pack_path}. "
             f"Add a pack directory rather than editing code."
         )
     with pack_path.open() as f:
-        data: dict[str, Any] = json.load(f)
+        data: dict[str, Any] = yaml.safe_load(f)
     return data
 
 

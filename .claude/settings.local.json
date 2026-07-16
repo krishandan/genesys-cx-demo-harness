@@ -32,7 +32,8 @@
       "Bash(curl -sS http://localhost:8000/openapi.json)",
       "Bash(python3 -c ' *)",
       "Bash(make seed *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git commit -q -m 'BE-1 housekeeping: convert seed packs from JSON to YAML *)"
     ]
   }
 }
