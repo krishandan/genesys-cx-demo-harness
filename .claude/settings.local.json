@@ -18,7 +18,15 @@
       "Bash(git add *)",
       "Bash(git commit -q -m 'BE-0: scaffold app skeleton, spine models, auth, seed, compose *)",
       "Bash(uv venv *)",
-      "Bash(uv pip *)"
+      "Bash(uv pip *)",
+      "Bash(cp -n .env.example .env)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(.venv/bin/pytest)",
+      "Bash(.venv/bin/ruff check *)",
+      "Bash(.venv/bin/mypy app *)",
+      "Bash(chmod +x scripts/demo_be0.sh)",
+      "Bash(./scripts/demo_be0.sh)",
+      "Bash(git commit -q -m 'BE-0: tests, demo walkthrough, README, local compose override *)"
     ]
   }
 }

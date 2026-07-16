@@ -1,0 +1,21 @@
+{
+  "tenant": {
+    "slug": "acme",
+    "display_name": "Acme Telecom",
+    "industry": "telco",
+    "branding_json": { "primary_color": "#FF6B00" }
+  },
+  "seed": {
+    "faker_seed": 999,
+    "faker_locale": "en_GB",
+    "party_count": 3,
+    "party_type": "person",
+    "tiers": ["bronze"],
+    "identities": ["phone", "email"],
+    "verification_factor": "pin",
+    "contact_channels": ["sms"],
+    "phone_pattern": "+447700901{index:03d}",
+    "email_domain": "example.org",
+    "account_pattern": "AC{index:06d}"
+  }
+}

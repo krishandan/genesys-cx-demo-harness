@@ -26,7 +26,12 @@ def upgrade() -> None:
         sa.Column("display_name", sa.String(length=128), nullable=False),
         sa.Column("industry", sa.String(length=64), nullable=False),
         sa.Column("branding_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("tenant_id"),
         sa.UniqueConstraint("slug"),
     )
@@ -39,7 +44,12 @@ def upgrade() -> None:
         sa.Column("party_type", sa.String(length=16), nullable=False),
         sa.Column("display_name", sa.String(length=128), nullable=False),
         sa.Column("tier", sa.String(length=32), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenant.tenant_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("party_id"),
         sa.CheckConstraint("party_type IN ('person', 'org')", name="ck_party_party_type"),

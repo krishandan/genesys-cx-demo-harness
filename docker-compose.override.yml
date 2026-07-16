@@ -1,0 +1,10 @@
+# Local-development deltas. Compose auto-loads this file on top of docker-compose.yml.
+#
+# It exists so host-run pytest can reach Postgres. On Unraid, deploy with the base
+# file only so the database stays internal to the compose network:
+#
+#   docker compose -f docker-compose.yml up -d
+services:
+  db:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
