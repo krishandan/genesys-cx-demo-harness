@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker --version)",
+      "Bash(echo \"docker: $\\(docker --version 2>&1\\)\")",
+      "Bash(docker compose *)",
+      "Bash(echo \"compose: $\\(docker compose version 2>&1\\)\")",
+      "Bash(git --version)",
+      "mcp__bfe04888-1f22-4625-9a62-edbad8438ded__notion-fetch",
+      "Bash(brew install *)",
+      "Bash(git init *)",
+      "Bash(git config *)",
+      "Bash(colima version *)",
+      "Bash(colima start *)",
+      "Bash(mkdir -p ~/.docker)",
+      "Bash(python3 -)",
+      "Bash(docker info *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'BE-0: scaffold app skeleton, spine models, auth, seed, compose *)",
+      "Bash(uv venv *)",
+      "Bash(uv pip *)"
+    ]
+  }
+}

@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-backlot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-backlot}
+      POSTGRES_DB: ${POSTGRES_DB:-backlot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-backlot} -d ${POSTGRES_DB:-backlot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No published port: Postgres stays internal to the compose network.
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      API_KEY: ${API_KEY:-dev-local-key-change-me}
+      DEFAULT_TENANT: ${DEFAULT_TENANT:-northwind}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://backlot:backlot@db:5432/backlot}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        ["CMD", "python", "-c",
+         "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Inert without a token. Start with: docker compose --profile tunnel up -d
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    depends_on:
+      - api
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+
+volumes:
+  pgdata:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      # Local: ./.data/postgres — Unraid: /mnt/user/appdata/backlot/postgres
+      device: ${POSTGRES_DATA_PATH:-./.data/postgres}

@@ -1,0 +1,27 @@
+{
+  "tenant": {
+    "slug": "northwind",
+    "display_name": "Northwind Mobile",
+    "industry": "telco",
+    "branding_json": {
+      "primary_color": "#0B5FFF",
+      "accent_color": "#00C2A8",
+      "logo_text": "Northwind Mobile",
+      "support_hours": "24/7",
+      "voice": "friendly-direct"
+    }
+  },
+  "seed": {
+    "faker_seed": 20260716,
+    "faker_locale": "en_GB",
+    "party_count": 10,
+    "party_type": "person",
+    "tiers": ["bronze", "silver", "gold"],
+    "identities": ["phone", "email", "account_no"],
+    "verification_factor": "dob",
+    "contact_channels": ["sms", "email"],
+    "phone_pattern": "+447700900{index:03d}",
+    "email_domain": "example.net",
+    "account_pattern": "NW{index:06d}"
+  }
+}
