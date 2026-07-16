@@ -26,7 +26,13 @@
       "Bash(.venv/bin/mypy app *)",
       "Bash(chmod +x scripts/demo_be0.sh)",
       "Bash(./scripts/demo_be0.sh)",
-      "Bash(git commit -q -m 'BE-0: tests, demo walkthrough, README, local compose override *)"
+      "Bash(git commit -q -m 'BE-0: tests, demo walkthrough, README, local compose override *)",
+      "Bash(curl -sS -o /dev/null -w \"HTTP %{http_code}  content-type: %{content_type}\\\\n\" http://localhost:8000/docs)",
+      "Bash(curl -sS -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8000/openapi.json)",
+      "Bash(curl -sS http://localhost:8000/openapi.json)",
+      "Bash(python3 -c ' *)",
+      "Bash(make seed *)",
+      "Bash(git commit *)"
     ]
   }
 }
