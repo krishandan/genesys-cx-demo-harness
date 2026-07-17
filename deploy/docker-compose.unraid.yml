@@ -94,12 +94,16 @@ services:
       # single API_KEY in .env so the two can never drift.
       BACKLOT_API_KEY: ${API_KEY:?set API_KEY in deploy/.env}
     healthcheck:
-      test:
-        ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 5s
+      # 127.0.0.1, not localhost: in this minimal image `localhost` resolves to IPv6
+      # ::1 first, but Next.js listens on IPv4 0.0.0.0 — so localhost is refused even
+      # though the server is up. wget here is busybox (node:alpine): it uses -q / -T /
+      # --spider; the GNU --quiet / --tries flags do not exist, and unlike Python's
+      # urllib (which the api uses) busybox does not fall back across address families.
+      test: ["CMD", "wget", "-q", "-T", "3", "--spider", "http://127.0.0.1:3000/"]
+      interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 20s
+      retries: 5
+      start_period: 30s
     # Internal only — cloudflared reaches it at http://web:3000.
 
   cloudflared:
