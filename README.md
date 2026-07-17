@@ -12,7 +12,8 @@ seed pack, same code.
 Phase briefs live in `phases/`. This README covers **BE-0 — Foundations** (app skeleton,
 API-key auth, the Tenant + Customer Spine, migrations, seed framework), **BE-1 — Spine
 to Genesys** (the `/gx/` surface, identifier normalization, verify-customer, exported
-data-action contracts), and **BE-2 — Network & Devices** (the WiFi self-healing engine).
+data-action contracts), **BE-2 — Network & Devices** (the WiFi self-healing engine), and
+**BE-3 — Scenario engine + admin UI** (stage and reset demo state on command).
 
 ## Requirements
 
@@ -28,10 +29,12 @@ make seed      # seeds the Northwind Mobile pack (idempotent)
 make demo      # the BE-0 curl walkthrough
 make demo-be1  # the BE-1 gx walkthrough
 make demo-be2  # the BE-2 WiFi self-healing walkthrough
+make demo-be3  # the BE-3 scenario engine walkthrough
 ```
 
 Then:
 
+- **Admin UI: <http://localhost:8000/admin/>** — stage and reset demo state
 - Health: <http://localhost:8000/health>
 - OpenAPI docs: <http://localhost:8000/docs>
 
@@ -61,7 +64,8 @@ same image runs on a laptop, on Unraid, or on AWS.
 | --- | --- | --- |
 | `APP_ENV` | `local` | Environment label. |
 | `APP_VERSION` | `0.1.0` | Reported by `/health`. |
-| `API_KEY` | `dev-local-key-change-me` | Required in `X-API-Key` on every `/v1` (later `/gx`) call. **Change this off local.** |
+| `API_KEY` | `dev-local-key-change-me` | Required in `X-API-Key` on every `/v1` and `/gx` call. **Change this off local.** |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | `admin` / `backlot-admin-change-me` | HTTP Basic for `/admin/*`. A separate trust domain from `API_KEY`. **Change both before exposing the tunnel.** |
 | `DEFAULT_TENANT` | `northwind` | Tenant used when a request sends no `X-Tenant` header. |
 | `DATABASE_URL` | `postgresql+psycopg://backlot:backlot@db:5432/backlot` | SQLAlchemy URL. `db` is the compose service name. |
 | `GX_BASE_URL` | `https://backlot-api.krishharness.com` | Base URL baked into exported data-action contracts. |
@@ -74,12 +78,21 @@ same image runs on a laptop, on Unraid, or on AWS.
 
 ## Auth
 
-Every `/v1` route requires the `X-API-Key` header and returns 401 without it. `/health`,
-`/docs`, and `/openapi.json` are public so container healthchecks and Genesys data-action
-imports work unauthenticated.
+Two separate trust domains. Neither credential grants the other's surface, and tests pin
+both directions.
+
+| Surface | Credential |
+| --- | --- |
+| `/gx/*`, `/v1/*` | `X-API-Key` header (`API_KEY`) — this is what Genesys holds |
+| `/admin/*` | HTTP Basic (`ADMIN_USER` / `ADMIN_PASSWORD`) |
+| `/health`, `/docs`, `/openapi.json` | public, so healthchecks and data-action imports work |
+
+The separation is deliberate: if the Genesys key could reach `/admin`, a flow bug could
+wipe demo state mid-presentation; if the admin login could reach `/gx`, an operator
+credential would also be a customer-data credential.
 
 Identity for M1 is **verify-then-context**: resolve the subscriber by identifier, then
-carry identity as context. `/gx/verify-customer` arrives in BE-1; OIDC is deferred to BE-5.
+carry identity as context. OIDC is deferred to BE-5.
 
 ## Tenant scoping
 
@@ -112,17 +125,65 @@ points.
 | | |
 | --- | --- |
 | Identifier | `+447700900000` (also resolvable by its email or `NW000000`) |
-| Staged fault | `device_band_stuck` — a steer-eligible phone pinned to 2.4GHz at −78 dBm while the same hub has a quiet 5GHz radio |
-| Second fault | `extender_flapping` — the Upstairs Extender is flapping with backhaul 34 |
-| WAN | Healthy, deliberately: the fault is inside the home |
+| Baseline | **Healthy.** The fault is staged by the `wifi_degraded` scenario, not seeded. |
 | Verify factor | `pin` = `1234` |
 
 Parties 1–3 get healthy networks for realism; the rest have no topology.
 
-The degraded state is **pack data**, not code. BE-2 seeds it directly — generalized
-apply/reset of scenarios is BE-3 — so **`make seed` is what resets a demo** after
-actions have healed the network. `scripts/demo_be2.sh` re-seeds before it runs for
-exactly this reason.
+The baseline is deliberately healthy: `reset` restores it, scenarios stage faults on top.
+A degraded baseline would make the seed accrete every demo's staged state once BE-5 adds
+Banking and Insurance.
+
+## Scenarios (staging a demo)
+
+Open **<http://localhost:8000/admin/>**, or drive it with curl:
+
+```bash
+ADMIN=admin:backlot-admin-change-me
+curl -su $ADMIN -X POST localhost:8000/admin/scenario/apply \
+  -H 'Content-Type: application/json' -d '{"scenario":"wifi_degraded"}'
+curl -su $ADMIN -X POST localhost:8000/admin/scenario/reset
+```
+
+| Scenario | Stages |
+| --- | --- |
+| `wifi_degraded` | The M1 demo: `device_band_stuck` + `extender_flapping`, WAN healthy |
+| `outage_in_area` | `wan_degraded` — diagnostics escalates instead of suggesting in-home fixes |
+| `healthy` | Heals the demo subscriber in place |
+
+**Run a demo, then reset — no `make seed` between takes.** `reset` re-materializes the
+seeded baseline in place, deriving it from the seed pack, so it cannot drift from what
+the pack describes.
+
+`apply` on a pack with `reset_first: true` resets first, so staging never depends on what
+the last take left behind.
+
+### Adding a scenario
+
+Drop a YAML file in `app/scenarios/packs/<tenant>/`. No code, no deploy — the admin UI
+picks it up as a button.
+
+```yaml
+name: my_scenario
+title: My scenario
+reset_first: true
+subscribers:
+  identifiers: ["+447700900000"]
+steps:
+  - description: What this step stages
+    entity: connected_device     # gateway | access_point | radio | connected_device
+    match: {seed_key: phone}     # the stable pack name, not a hardcoded id
+    set:
+      band: "2.4"
+      rssi: -78
+```
+
+Scenarios only **set fields on rows that already exist** — they never create or delete,
+and they cannot set `tenant_id`, `party_id`, or `seed_key` (which is what stops a
+scenario reaching across tenants). They also don't redefine detection: the thresholds in
+`config_json.network` decide what a staged state *means*.
+
+Every apply and reset is recorded in an event log, shown in the admin UI.
 
 ### Adding a customer
 
@@ -347,7 +408,9 @@ The `cloudflared` service is behind a `tunnel` profile, so it stays out of the d
 
 `https://api.<your-domain>/health` should then answer, and that is the base URL a Genesys
 data action points at. Keep `API_KEY` strong once the tunnel is public: the hostname is
-reachable from the internet and the key is the only thing in front of it.
+reachable from the internet and the key is the only thing in front of it. The same goes
+for `ADMIN_PASSWORD` — `/admin/*` rides the same public hostname, and it can restage or
+reset a live demo.
 
 ## Layout
 
@@ -360,10 +423,12 @@ app/
     profile/  subscriber rollup + /v1/profile
     network/  WiFi engine: models, config, fault detectors, action verbs, /v1/network
   gx/         flat contract-safe endpoints, normalization, masking, contract exporter
+  scenarios/  engine + packs/<tenant>/*.yaml + event log
+  admin/      Basic auth, scenario controls, Jinja + htmx UI (htmx vendored)
   seed/       deterministic generator + network seeder + packs/<tenant>/pack.yaml
 alembic/      migrations
 contracts/    exported Genesys data actions (generated: make contracts)
-scripts/      demo_be0.sh, demo_be1.sh, demo_be2.sh
+scripts/      demo_be0.sh, demo_be1.sh, demo_be2.sh, demo_be3.sh
 tests/
 phases/       BE-*.md build briefs
 ```

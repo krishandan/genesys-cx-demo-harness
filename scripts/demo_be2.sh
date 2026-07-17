@@ -18,6 +18,7 @@ if [[ -f .env ]]; then
   set +a
 fi
 API_KEY="${API_KEY:-dev-local-key-change-me}"
+ADMIN="${ADMIN_USER:-admin}:${ADMIN_PASSWORD:-backlot-admin-change-me}"
 DEMO_PHONE="${DEMO_PHONE:-+447700900000}"
 HEALTHY_PHONE="${HEALTHY_PHONE:-+447700900001}"
 
@@ -48,15 +49,17 @@ sys.exit(1 if [k for k, v in body.items() if isinstance(v, (list, dict))] else 0
 
 printf '\033[1mBacklot BE-2 — WiFi self-healing — %s\033[0m\n' "$BASE"
 
-# ── 0. reset to the staged baseline ──────────────────────────────────────────
-# BE-2 seeds the degraded state directly; generalized apply/reset is BE-3, so a
-# re-seed is what makes this walkthrough repeatable.
+# ── 0. stage the fault ───────────────────────────────────────────────────────
+# The seeded baseline is healthy. BE-3's scenario engine stages the fault, which
+# is what makes this walkthrough repeatable without a re-seed.
 if [[ "$RESET" == "1" ]]; then
-  step "Reset: re-seed the staged degraded baseline"
-  if docker compose exec -T api python -m app.seed --tenant northwind >/dev/null 2>&1; then
-    ok "re-seeded northwind"
+  step "Stage the demo fault (admin: apply wifi_degraded)"
+  staged=$(curl -sS -u "$ADMIN" -X POST "$BASE/admin/scenario/apply" \
+    -H "Content-Type: application/json" -d '{"scenario":"wifi_degraded"}')
+  if grep -q '"ok": *true' <<<"$staged"; then
+    ok "applied wifi_degraded"
   else
-    bad "could not re-seed (is the stack up? use RESET=0 for a remote BASE)"
+    bad "could not stage wifi_degraded: $staged"
   fi
 fi
 

@@ -1,4 +1,4 @@
-.PHONY: help up down logs build seed migrate revision test lint typecheck check demo demo-be1 demo-be2 contracts fmt venv
+.PHONY: help up down logs build seed migrate revision test lint typecheck check demo demo-be1 demo-be2 demo-be3 contracts fmt venv
 
 ENV_FILE := .env
 POSTGRES_DATA_PATH ?= ./.data/postgres
@@ -59,6 +59,9 @@ demo-be1: ## Run the BE-1 gx walkthrough
 
 demo-be2: ## Run the BE-2 WiFi self-healing walkthrough
 	./scripts/demo_be2.sh
+
+demo-be3: ## Run the BE-3 scenario engine walkthrough
+	./scripts/demo_be3.sh
 
 venv: ## Create the host venv used by test/lint/typecheck
 	uv venv --python 3.12 .venv

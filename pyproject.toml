@@ -13,6 +13,7 @@ dependencies = [
     "psycopg[binary]>=3.1",
     "faker>=25.0",
     "pyyaml>=6.0",
+    "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -32,7 +33,12 @@ build-backend = "setuptools.build_meta"
 include = ["app*"]
 
 [tool.setuptools.package-data]
-app = ["seed/packs/*/*.yaml"]
+app = [
+    "seed/packs/*/*.yaml",
+    "scenarios/packs/*/*.yaml",
+    "admin/templates/*.html",
+    "admin/static/*",
+]
 
 [tool.ruff]
 target-version = "py312"

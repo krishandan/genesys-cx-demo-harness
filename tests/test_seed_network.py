@@ -14,18 +14,20 @@ def _count(db: Session, model: type) -> int:
 
 
 def _demo_device(db: Session) -> ConnectedDevice:
-    """The steer-eligible phone on the degraded subscriber."""
+    """The demo subscriber's phone, matched by its stable pack key."""
     return db.execute(
-        select(ConnectedDevice).where(
-            ConnectedDevice.steer_eligible.is_(True), ConnectedDevice.band == "2.4"
-        )
+        select(ConnectedDevice)
+        .join(Party, Party.party_id == ConnectedDevice.party_id)
+        .where(ConnectedDevice.seed_key == "phone", ConnectedDevice.label.like("%'s Phone"))
+        .order_by(Party.display_name)
+        .limit(1)
     ).scalar_one()
 
 
 def test_seed_creates_the_expected_topology(db: Session) -> None:
     result = seed_tenant(db, "northwind")
 
-    # 1 degraded + 3 healthy subscribers get a home network.
+    # The demo subscriber plus 3 standard homes.
     assert result.gateways == 4
     assert _count(db, Gateway) == 4
     assert _count(db, AccessPoint) == 8
@@ -33,22 +35,31 @@ def test_seed_creates_the_expected_topology(db: Session) -> None:
     assert _count(db, ConnectedDevice) == 9
 
 
-def test_degraded_subscriber_matches_the_pack(db: Session) -> None:
+def test_the_seeded_baseline_is_healthy(db: Session) -> None:
+    """The seed stages nothing. Faults come from the scenario engine, so a reset has a
+    clean state to restore and the pack does not accrete every demo's staged fault."""
     seed_tenant(db, "northwind")
 
     phone = _demo_device(db)
-    assert phone.band == "2.4"
-    assert phone.rssi == -78
+    assert phone.band == "5"
+    assert phone.rssi == -48
     assert phone.steer_eligible is True
 
-    extender = db.execute(
-        select(AccessPoint).where(AccessPoint.kind == "extender", AccessPoint.status == "flapping")
-    ).scalar_one()
-    assert extender.backhaul_quality == 34
+    aps = db.execute(select(AccessPoint)).scalars().all()
+    assert {ap.status for ap in aps} == {"online"}
 
-    # WAN is healthy: the fault is inside the home, which is the demo's whole point.
     gateways = db.execute(select(Gateway)).scalars().all()
     assert {g.wan_status for g in gateways} == {"online"}
+
+
+def test_seed_keys_are_populated(db: Session) -> None:
+    """Scenarios match on seed_key, so every seeded entity must carry one."""
+    seed_tenant(db, "northwind")
+
+    assert _demo_device(db).seed_key == "phone"
+    assert {ap.seed_key for ap in db.execute(select(AccessPoint)).scalars()} == {"hub", "ext1"}
+    assert {g.seed_key for g in db.execute(select(Gateway)).scalars()} == {"gateway"}
+    assert "hub-2.4" in {r.seed_key for r in db.execute(select(Radio)).scalars()}
 
 
 def test_device_labels_interpolate_the_party_name(db: Session) -> None:
@@ -91,16 +102,16 @@ def test_seed_is_idempotent_for_networks(db: Session) -> None:
     assert first == second
 
 
-def test_reseed_restores_the_degraded_baseline(db: Session) -> None:
-    """BE-2 has no scenario engine yet (that is BE-3), so `make seed` is what resets
-    a demo. It must put the staged fault back after actions have healed it."""
+def test_reseed_restores_the_baseline(db: Session) -> None:
+    """A re-seed still restores the baseline. `reset` is the fast in-place path for
+    between takes; this is the belt-and-braces one."""
     seed_tenant(db, "northwind")
     phone = _demo_device(db)
     device_id = phone.device_id
 
-    # Simulate a demo run: the phone gets steered onto 5GHz.
-    phone.band = "5"
-    phone.rssi = -56
+    # Simulate a demo run leaving the phone somewhere else.
+    phone.band = "2.4"
+    phone.rssi = -78
     db.add(phone)
     db.commit()
 
@@ -108,28 +119,8 @@ def test_reseed_restores_the_degraded_baseline(db: Session) -> None:
 
     restored = db.get(ConnectedDevice, device_id)
     assert restored is not None
-    assert restored.band == "2.4"
-    assert restored.rssi == -78
-
-
-def test_reseed_restores_a_healed_extender(db: Session) -> None:
-    seed_tenant(db, "northwind")
-    extender = db.execute(
-        select(AccessPoint).where(AccessPoint.kind == "extender", AccessPoint.status == "flapping")
-    ).scalar_one()
-    ap_id = extender.ap_id
-
-    extender.status = "online"
-    extender.backhaul_quality = 92
-    db.add(extender)
-    db.commit()
-
-    seed_tenant(db, "northwind")
-
-    restored = db.get(AccessPoint, ap_id)
-    assert restored is not None
-    assert restored.status == "flapping"
-    assert restored.backhaul_quality == 34
+    assert restored.band == "5"
+    assert restored.rssi == -48
 
 
 def test_network_ids_are_deterministic(db: Session) -> None:
@@ -155,7 +146,7 @@ def test_editing_the_network_pack_does_not_strand_rows(db: Session, tmp_path: Pa
     assert _count(db, Gateway) == 4
 
     # The pack stops giving networks to the healthy subscribers.
-    pack["seed"]["network"]["assign"] = {"degraded": [0]}
+    pack["seed"]["network"]["assign"] = {"demo_home": [0]}
     write(pack)
     seed_tenant(db, "northwind", packs_dir=tmp_path)
 

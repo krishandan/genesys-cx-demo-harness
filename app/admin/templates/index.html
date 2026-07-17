@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backlot admin · {{ tenant.display_name }}</title>
+  <script src="/admin/static/htmx.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1115; --panel: #171a21; --line: #262b36; --text: #e7eaf0;
+      --muted: #8b93a5; --ok: #35c88a; --warn: #f0a44a; --bad: #f0605d;
+      --accent: {{ tenant.branding_json.get('primary_color', '#0B5FFF') }};
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    header {
+      display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+      padding: 18px 24px; border-bottom: 1px solid var(--line); background: var(--panel);
+    }
+    header h1 { margin: 0; font-size: 17px; letter-spacing: -0.01em; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+    .muted { color: var(--muted); }
+    main { padding: 24px; max-width: 1180px; }
+    section { margin-bottom: 28px; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .09em;
+         color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button {
+      background: var(--panel); color: var(--text); border: 1px solid var(--line);
+      padding: 8px 14px; border-radius: 7px; cursor: pointer; font-size: 13px;
+      font-family: inherit;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    button.reset { border-color: #3a4152; }
+    button[aria-busy="true"] { opacity: .5; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+    th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+    tbody tr:hover { background: #1b1f28; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; border: 1px solid transparent;
+    }
+    .pill.ok { color: var(--ok); background: rgba(53,200,138,.1); border-color: rgba(53,200,138,.3); }
+    .pill.bad { color: var(--bad); background: rgba(240,96,93,.1); border-color: rgba(240,96,93,.3); }
+    .pill.none { color: var(--muted); background: #1b1f28; border-color: var(--line); }
+    .err { color: var(--bad); border: 1px solid rgba(240,96,93,.4); background: rgba(240,96,93,.08);
+           padding: 8px 12px; border-radius: 7px; margin-bottom: 12px; }
+    .htmx-swapping { opacity: .35; transition: opacity .1s; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="dot"></span>
+    <h1>Backlot admin</h1>
+    <span class="muted">{{ tenant.display_name }} · <code>{{ tenant.slug }}</code> · {{ tenant.industry }}</span>
+  </header>
+
+  <main>
+    <section>
+      <h2>Scenarios</h2>
+      <div class="controls">
+        {% for s in scenarios %}
+          <button
+            class="{% if s.name == 'wifi_degraded' %}primary{% endif %}"
+            hx-post="/admin/ui/apply/{{ s.name }}"
+            hx-target="#state"
+            hx-swap="outerHTML"
+            title="{{ s.description }}">{{ s.title }}</button>
+        {% endfor %}
+        <button class="reset" hx-post="/admin/ui/reset" hx-target="#state" hx-swap="outerHTML">
+          Reset to baseline
+        </button>
+      </div>
+      <p class="hint">
+        Reset restores the seeded baseline in place — no <code>make seed</code> needed
+        between takes. Applying a scenario re-stages the fault from a clean slate.
+      </p>
+    </section>
+
+    {% include "_state.html" %}
+  </main>
+</body>
+</html>

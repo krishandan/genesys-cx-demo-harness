@@ -1,0 +1,40 @@
+# Everything working.
+#
+# Distinct from `reset`: reset re-materializes the whole seeded baseline for the
+# tenant, while this only heals the demo subscriber's network in place. Useful to
+# show a good-state read without disturbing anything else.
+name: healthy
+title: Healthy
+description: The demo subscriber's home network with no faults.
+
+reset_first: false
+
+subscribers:
+  identifiers: ["+447700900000"]
+
+steps:
+  - description: WAN back online
+    entity: gateway
+    match: {seed_key: gateway}
+    set:
+      wan_status: online
+
+  - description: Phone on 5GHz with a strong signal
+    entity: connected_device
+    match: {seed_key: phone}
+    set:
+      band: "5"
+      rssi: -48
+
+  - description: Quiet the 2.4GHz radio
+    entity: radio
+    match: {seed_key: hub-2.4}
+    set:
+      utilization: 24
+
+  - description: Extender online on a good backhaul
+    entity: access_point
+    match: {seed_key: ext1}
+    set:
+      status: online
+      backhaul_quality: 96

@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     api_key: str = "dev-local-key-change-me"
     default_tenant: str = "northwind"
 
+    # Admin UI / scenario controls. A separate trust domain from api_key: Genesys must
+    # never be able to stage a demo, and an operator must never read subscriber data
+    # through gx with these.
+    admin_user: str = "admin"
+    admin_password: str = "backlot-admin-change-me"
+
     database_url: str = "postgresql+psycopg://backlot:backlot@db:5432/backlot"
 
     # Base URL baked into exported Genesys data-action contracts. Locked public URL.

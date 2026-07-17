@@ -1,0 +1,73 @@
+{# The live half of the page. htmx swaps this whole node, so an apply/reset shows
+   the record changing without a reload. #}
+<div id="state">
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+  <section>
+    <h2>Subscribers</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Subscriber</th>
+          <th>Identifier</th>
+          <th>Tier</th>
+          <th>Network</th>
+          <th>Fault</th>
+          <th>Recommends</th>
+          <th>WAN</th>
+          <th>Extender</th>
+          <th>Worst device</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in subscribers %}
+          <tr>
+            <td>{{ s.display_name }}</td>
+            <td><code>{{ s.identifier }}</code></td>
+            <td class="muted">{{ s.tier }}</td>
+            <td>
+              {% if not s.has_network %}
+                <span class="pill none">none</span>
+              {% elif s.healthy %}
+                <span class="pill ok">healthy</span>
+              {% else %}
+                <span class="pill bad">degraded</span>
+              {% endif %}
+            </td>
+            <td>{% if s.fault_type and s.fault_type != 'none' %}<code>{{ s.fault_type }}</code>{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="muted">{% if s.recommended_action and s.recommended_action != 'none' %}{{ s.recommended_action }}{% else %}—{% endif %}</td>
+            <td class="muted">{{ s.wan_status or "—" }}</td>
+            <td class="muted">{{ s.extender_status or "—" }}</td>
+            <td class="muted">
+              {% if s.has_network and s.worst_device_label %}
+                {{ s.worst_device_label }} · {{ s.worst_device_band }}GHz · {{ s.worst_device_rssi }} dBm
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Event log</h2>
+    <table>
+      <thead>
+        <tr><th>When</th><th>Action</th><th>Scenario</th><th>Rows</th><th>Summary</th></tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+          <tr>
+            <td class="muted"><code>{{ e.created_at.strftime("%H:%M:%S") }}</code></td>
+            <td><span class="pill {% if e.action == 'reset' %}none{% else %}bad{% endif %}">{{ e.action }}</span></td>
+            <td><code>{{ e.scenario or "—" }}</code></td>
+            <td class="muted">{{ e.rows_changed }}</td>
+            <td class="muted">{{ e.summary }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">No scenario activity yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>

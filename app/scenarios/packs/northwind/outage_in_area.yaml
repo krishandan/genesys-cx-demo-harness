@@ -1,0 +1,23 @@
+# A WAN-side outage: nothing the customer can self-heal.
+#
+# wan_degraded outranks the in-home faults in fault_precedence, so the verdict
+# reports it and recommends `escalate` rather than sending AVA down a band-steer
+# path that cannot help.
+name: outage_in_area
+title: Outage in the area
+description: >-
+  The gateway's WAN link is degraded. Diagnostics should stop recommending in-home
+  fixes and escalate instead.
+
+reset_first: true
+
+subscribers:
+  identifiers: ["+447700900000"]
+
+steps:
+  - description: Degrade the WAN link
+    entity: gateway
+    match: {seed_key: gateway}
+    set:
+      wan_status: degraded
+      uptime_s: 412

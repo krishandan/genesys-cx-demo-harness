@@ -51,19 +51,23 @@ seed:
   account_pattern: "NW{index:06d}"
 
   # ── Home networks ──────────────────────────────────────────────────────────
-  # The topology is pack data, not code. BE-2 seeds the degraded baseline
-  # directly; generalized apply/reset of scenarios is BE-3, so for now a
-  # re-seed (`make seed`) is what restores this baseline after a demo.
+  # The topology is pack data, not code.
+  #
+  # This is the BASELINE and it is HEALTHY. Faults are staged by the scenario
+  # engine (app/scenarios/packs/northwind/), not seeded. `reset` re-materializes
+  # exactly what is described here, which is why a demo needs no `make seed`
+  # between takes.
   network:
-    # party index 0 (+447700900000) is the degraded demo subscriber.
     assign:
-      degraded: [0]
-      healthy: [1, 2, 3]
+      demo_home: [0]        # +447700900000 — the WiFi demo subscriber
+      standard_home: [1, 2, 3]
     profiles:
-      degraded:
+      # The demo subscriber's home. Everything healthy; `wifi_degraded` breaks it.
+      demo_home:
         gateway:
+          key: gateway
           model: Northwind Hub 6
-          wan_status: online        # WAN is healthy; the fault is inside the home
+          wan_status: online
           uptime_s: 482913
         access_points:
           - key: hub
@@ -76,21 +80,21 @@ seed:
             label: Upstairs Extender
             kind: extender
             model: Northwind Mesh Point
-            status: flapping        # fault 2: cleared by reboot-extender
-            backhaul_quality: 34
+            status: online
+            backhaul_quality: 96
         radios:
-          - {ap: hub, band: "2.4", channel: 6, utilization: 71}
+          # The hub carries both bands: that 5GHz radio is what makes the phone
+          # steerable once wifi_degraded pins it to 2.4.
+          - {ap: hub, band: "2.4", channel: 6, utilization: 24}
           - {ap: hub, band: "5", channel: 44, utilization: 22}
-          - {ap: ext1, band: "2.4", channel: 6, utilization: 64}
+          - {ap: ext1, band: "2.4", channel: 6, utilization: 19}
           - {ap: ext1, band: "5", channel: 44, utilization: 18}
         devices:
-          # fault 1: 5GHz-capable phone pinned to 2.4GHz at poor signal,
-          # while the same hub has a quiet 5GHz radio. Cleared by band-steer.
           - key: phone
             label: "{first_name}'s Phone"
             ap: hub
-            band: "2.4"
-            rssi: -78
+            band: "5"
+            rssi: -48
             steer_eligible: true
           - key: tv
             label: Living Room TV
@@ -104,8 +108,9 @@ seed:
             band: "5"
             rssi: -61
             steer_eligible: true
-      healthy:
+      standard_home:
         gateway:
+          key: gateway
           model: Northwind Hub 6
           wan_status: online
           uptime_s: 903221

@@ -50,6 +50,7 @@ class Gateway(Base):
     party_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("party.party_id", ondelete="CASCADE"), nullable=False, index=True
     )
+    seed_key: Mapped[str] = mapped_column(String(32), nullable=False, default="", index=True)
     model: Mapped[str] = mapped_column(String(64), nullable=False)
     wan_status: Mapped[str] = mapped_column(String(16), nullable=False, default="online")
     uptime_s: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -77,6 +78,7 @@ class AccessPoint(Base):
     party_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("party.party_id", ondelete="CASCADE"), nullable=False, index=True
     )
+    seed_key: Mapped[str] = mapped_column(String(32), nullable=False, default="", index=True)
     label: Mapped[str] = mapped_column(String(64), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     model: Mapped[str] = mapped_column(String(64), nullable=False, default="")
@@ -108,6 +110,7 @@ class Radio(Base):
     ap_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("access_point.ap_id", ondelete="CASCADE"), nullable=False, index=True
     )
+    seed_key: Mapped[str] = mapped_column(String(32), nullable=False, default="", index=True)
     band: Mapped[str] = mapped_column(String(8), nullable=False)
     channel: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     utilization: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -131,6 +134,7 @@ class ConnectedDevice(Base):
     connected_ap_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("access_point.ap_id", ondelete="CASCADE"), nullable=False, index=True
     )
+    seed_key: Mapped[str] = mapped_column(String(32), nullable=False, default="", index=True)
     label: Mapped[str] = mapped_column(String(64), nullable=False)
     mac: Mapped[str] = mapped_column(String(17), nullable=False)
     band: Mapped[str] = mapped_column(String(8), nullable=False)

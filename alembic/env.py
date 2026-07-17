@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.core import models  # noqa: F401
 from app.db import Base
 from app.modules.network import models as network_models  # noqa: F401
+from app.scenarios import models as scenario_models  # noqa: F401
 
 config = context.config
 

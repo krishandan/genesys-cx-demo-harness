@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from fastapi.testclient import TestClient
     from sqlalchemy.orm import Session
 
+    from app.core.models import Tenant
+
 PG_USER = os.environ.get("TEST_PG_USER", "backlot")
 PG_PASSWORD = os.environ.get("TEST_PG_PASSWORD", "backlot")
 PG_HOST = os.environ.get("TEST_PG_HOST", "localhost")
@@ -29,9 +31,13 @@ TEST_DATABASE_URL = (
 )
 
 TEST_API_KEY = "test-key"
+TEST_ADMIN_USER = "admin"
+TEST_ADMIN_PASSWORD = "test-admin-password"
 
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["API_KEY"] = TEST_API_KEY
+os.environ["ADMIN_USER"] = TEST_ADMIN_USER
+os.environ["ADMIN_PASSWORD"] = TEST_ADMIN_PASSWORD
 os.environ["DEFAULT_TENANT"] = "northwind"
 os.environ["APP_ENV"] = "test"
 
@@ -108,3 +114,24 @@ def seeded_acme(db: "Session") -> None:
     from app.seed.generator import seed_tenant
 
     seed_tenant(db, "acme", packs_dir=TEST_PACKS_DIR)
+
+
+@pytest.fixture
+def northwind(db: "Session", seeded_northwind: None) -> "Tenant":
+    from sqlalchemy import select
+
+    from app.core.models import Tenant
+
+    return db.execute(select(Tenant).where(Tenant.slug == "northwind")).scalar_one()
+
+
+@pytest.fixture
+def staged_wifi_degraded(db: "Session", northwind: "Tenant") -> None:
+    """The seeded baseline is healthy; the demo fault is staged by the scenario engine.
+
+    BE-2's behaviour is unchanged — the fault just arrives via apply() now instead of
+    being seeded.
+    """
+    from app.scenarios.engine import apply
+
+    apply(db, northwind, "wifi_degraded")

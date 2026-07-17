@@ -1,0 +1,39 @@
+# The M1 WiFi self-healing demo fault.
+#
+# Stages two faults at once. The verdict reports device_band_stuck first because
+# of `fault_precedence` in the tenant's config_json.network (least disruptive
+# remedy first), so the demo runs band-steer, then reboot-extender.
+name: wifi_degraded
+title: WiFi degraded (the M1 demo)
+description: >-
+  Anne's phone is pinned to 2.4GHz at a poor signal while the hub's 5GHz radio sits
+  quiet, and the upstairs extender is flapping. The WAN is healthy: the fault is
+  inside the home, which is the whole point of the demo.
+
+# Restore the baseline before staging, so apply is idempotent and does not depend
+# on what a previous take left behind.
+reset_first: true
+
+subscribers:
+  identifiers: ["+447700900000"]
+
+steps:
+  - description: Pin the phone to 2.4GHz with a poor signal
+    entity: connected_device
+    match: {seed_key: phone}
+    set:
+      band: "2.4"
+      rssi: -78
+
+  - description: Busy the 2.4GHz radio, so the story reads as congestion
+    entity: radio
+    match: {seed_key: hub-2.4}
+    set:
+      utilization: 71
+
+  - description: Make the upstairs extender flap on a poor backhaul
+    entity: access_point
+    match: {seed_key: ext1}
+    set:
+      status: flapping
+      backhaul_quality: 34

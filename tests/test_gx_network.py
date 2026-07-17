@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from tests.test_gx_customer_context import assert_flat
 
-DEGRADED = "+447700900000"  # northwind pack: seed.network.assign.degraded
+DEGRADED = "+447700900000"  # the demo subscriber; healthy until wifi_degraded is applied
 HEALTHY = "+447700900001"
 NO_NETWORK = "+447700900009"  # seeded party with no topology assigned
 UNKNOWN = "+447700900999"
@@ -45,8 +45,8 @@ def test_requires_api_key(client: TestClient) -> None:
     assert client.post("/gx/device-action", json={}).status_code == 401
 
 
-def test_demo_subscriber_returns_the_seeded_fault(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+def test_demo_subscriber_returns_the_staged_fault(
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     body = diagnostics(client, auth, DEGRADED)
 
@@ -63,13 +63,13 @@ def test_demo_subscriber_returns_the_seeded_fault(
 
 
 def test_diagnostics_is_flat(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     assert_flat(diagnostics(client, auth, DEGRADED))
 
 
 def test_healthy_subscriber_returns_no_fault(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     body = diagnostics(client, auth, HEALTHY)
 
@@ -81,7 +81,7 @@ def test_healthy_subscriber_returns_no_fault(
 
 
 def test_unknown_subscriber_is_found_false_not_an_error(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     body = diagnostics(client, auth, UNKNOWN)
 
@@ -90,7 +90,7 @@ def test_unknown_subscriber_is_found_false_not_an_error(
 
 
 def test_subscriber_without_a_network_is_found_false(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     body = diagnostics(client, auth, NO_NETWORK)
 
@@ -98,20 +98,20 @@ def test_subscriber_without_a_network_is_found_false(
 
 
 def test_found_and_not_found_share_a_key_set(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     assert diagnostics(client, auth, DEGRADED).keys() == diagnostics(client, auth, UNKNOWN).keys()
 
 
 def test_diagnostics_normalizes_the_identifier(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     for spelling in (" 447700900000", "07700900000"):
         assert diagnostics(client, auth, spelling)["fault_type"] == "device_band_stuck"
 
 
 def test_cross_tenant_diagnostics_does_not_leak(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None, seeded_acme: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None, seeded_acme: None
 ) -> None:
     body = diagnostics(client, {**auth, "X-Tenant": "acme"}, DEGRADED)
 
@@ -122,8 +122,8 @@ def test_cross_tenant_diagnostics_does_not_leak(
 # ── net-status ───────────────────────────────────────────────────────────────────────
 
 
-def test_status_reports_the_degraded_baseline(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+def test_status_reports_the_staged_fault(
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     body = status(client, auth, DEGRADED)
 
@@ -139,7 +139,7 @@ def test_status_reports_the_degraded_baseline(
 
 
 def test_status_for_a_healthy_subscriber(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     body = status(client, auth, HEALTHY)
 
@@ -151,7 +151,7 @@ def test_status_for_a_healthy_subscriber(
 
 
 def test_band_steer_clears_the_fault_and_mutates_state(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     target = diagnostics(client, auth, DEGRADED)["primary_target"]
 
@@ -170,7 +170,7 @@ def test_band_steer_clears_the_fault_and_mutates_state(
 
 
 def test_the_full_self_heal_sequence(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     """The demo path: diagnose → band-steer → diagnose → reboot-extender → healthy."""
     first = diagnostics(client, auth, DEGRADED)
@@ -196,7 +196,7 @@ def test_the_full_self_heal_sequence(
 
 
 def test_reboot_extender_mutates_the_extender(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     network = client.get("/v1/network", params={"identifier": DEGRADED}, headers=auth).json()
     extender = next(ap for ap in network["access_points"] if ap["kind"] == "extender")
@@ -212,7 +212,7 @@ def test_reboot_extender_mutates_the_extender(
 
 
 def test_reboot_ap_reattaches_devices(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     network = client.get("/v1/network", params={"identifier": DEGRADED}, headers=auth).json()
     hub = next(ap for ap in network["access_points"] if ap["kind"] == "gateway")
@@ -226,7 +226,7 @@ def test_reboot_ap_reattaches_devices(
 
 
 def test_band_steer_accepts_params_as_a_json_string(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     target = diagnostics(client, auth, DEGRADED)["primary_target"]
 
@@ -240,7 +240,7 @@ def test_band_steer_accepts_params_as_a_json_string(
 
 
 def test_unknown_target_is_a_flat_404(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     r = act(client, auth, DEGRADED, "band-steer", "00000000-0000-0000-0000-000000000000")
 
@@ -252,7 +252,7 @@ def test_unknown_target_is_a_flat_404(
 
 
 def test_a_target_that_is_not_even_a_uuid_is_a_flat_404(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     r = act(client, auth, DEGRADED, "band-steer", "not-a-uuid")
 
@@ -261,7 +261,7 @@ def test_a_target_that_is_not_even_a_uuid_is_a_flat_404(
 
 
 def test_unknown_action_is_a_flat_400(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     target = diagnostics(client, auth, DEGRADED)["primary_target"]
 
@@ -275,7 +275,7 @@ def test_unknown_action_is_a_flat_400(
 
 
 def test_wrong_verb_for_the_target_is_a_flat_400(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     """reboot-extender aimed at the gateway, not an extender."""
     network = client.get("/v1/network", params={"identifier": DEGRADED}, headers=auth).json()
@@ -289,7 +289,7 @@ def test_wrong_verb_for_the_target_is_a_flat_400(
 
 
 def test_band_steer_on_a_non_steerable_device_is_a_flat_400(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     network = client.get("/v1/network", params={"identifier": DEGRADED}, headers=auth).json()
     tv = next(d for d in network["devices"] if not d["steer_eligible"])
@@ -301,7 +301,7 @@ def test_band_steer_on_a_non_steerable_device_is_a_flat_400(
 
 
 def test_unknown_subscriber_action_is_a_flat_404(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     r = act(client, auth, UNKNOWN, "band-steer", "00000000-0000-0000-0000-000000000000")
 
@@ -310,7 +310,7 @@ def test_unknown_subscriber_action_is_a_flat_404(
 
 
 def test_malformed_params_is_a_flat_400(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None
 ) -> None:
     target = diagnostics(client, auth, DEGRADED)["primary_target"]
 
@@ -324,7 +324,7 @@ def test_malformed_params_is_a_flat_400(
 
 
 def test_cross_tenant_action_cannot_mutate_another_tenants_device(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None, seeded_acme: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None, seeded_acme: None
 ) -> None:
     """An acme-scoped call must not touch a northwind device, even given its real id."""
     northwind_target = diagnostics(client, auth, DEGRADED)["primary_target"]
@@ -342,7 +342,7 @@ def test_cross_tenant_action_cannot_mutate_another_tenants_device(
 
 
 def test_each_tenant_diagnoses_its_own_network(
-    client: TestClient, auth: dict[str, str], seeded_northwind: None, seeded_acme: None
+    client: TestClient, auth: dict[str, str], staged_wifi_degraded: None, seeded_acme: None
 ) -> None:
     acme = diagnostics(client, {**auth, "X-Tenant": "acme"}, ACME_PHONE)
 

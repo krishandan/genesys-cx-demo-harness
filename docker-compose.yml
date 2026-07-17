@@ -25,6 +25,8 @@ services:
       APP_ENV: ${APP_ENV:-local}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       API_KEY: ${API_KEY:-dev-local-key-change-me}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-backlot-admin-change-me}
       DEFAULT_TENANT: ${DEFAULT_TENANT:-northwind}
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://backlot:backlot@db:5432/backlot}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

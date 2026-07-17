@@ -16,6 +16,11 @@ from app.config import get_settings
 
 PUBLIC_PATHS = frozenset({"/health", "/docs", "/openapi.json"})
 
+# /admin is a different trust domain: it has its own Basic auth (app/admin/auth.py).
+# Skipping it here is what stops the gx key from being usable as an admin credential —
+# the key never grants /admin, because /admin does not consult it at all.
+UNCHECKED_PREFIXES = ("/admin",)
+
 API_KEY_HEADER = "X-API-Key"
 
 
@@ -23,7 +28,8 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if request.url.path in PUBLIC_PATHS:
+        path = request.url.path
+        if path in PUBLIC_PATHS or path.startswith(UNCHECKED_PREFIXES):
             return await call_next(request)
 
         supplied = request.headers.get(API_KEY_HEADER)
