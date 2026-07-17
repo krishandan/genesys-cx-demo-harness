@@ -1,0 +1,91 @@
+{
+  "name": "Backlot - Device Action",
+  "integrationType": "custom-rest-actions",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/device-action",
+      "requestType": "POST",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}",
+        "X-Tenant": "${input.tenant}",
+        "Content-Type": "application/json"
+      },
+      "requestTemplate": "{\"identifier\": \"${input.identifier}\",\"action\": \"${input.action}\",\"target\": \"${input.target}\",\"params\": \"${input.params}\"}"
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - Device Action input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
+          },
+          "action": {
+            "type": "string",
+            "description": "band-steer | reboot-extender | reboot-ap"
+          },
+          "target": {
+            "type": "string",
+            "description": "device_id or ap_id, taken from net-diagnostics primary_target."
+          },
+          "params": {
+            "type": "string",
+            "description": "Optional JSON object as a string, e.g. '{\"band\":\"5\"}'. Leave empty for the default behaviour."
+          },
+          "tenant": {
+            "type": "string",
+            "description": "Tenant slug. Leave empty to use the API's default tenant."
+          }
+        },
+        "required": [
+          "action",
+          "identifier",
+          "target"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "DeviceActionOut output",
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "action": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "result_summary": {
+            "type": "string"
+          },
+          "fault_cleared": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action",
+          "fault_cleared",
+          "ok",
+          "result_summary",
+          "target"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

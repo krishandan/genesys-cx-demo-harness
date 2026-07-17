@@ -8,6 +8,7 @@ from app.core.routes import router as core_router
 from app.core.schemas import HealthOut
 from app.gx.routes import router as gx_router
 from app.logging import configure_logging
+from app.modules.network.routes import router as network_router
 from app.modules.profile.routes import router as profile_router
 
 settings = get_settings()
@@ -23,6 +24,7 @@ app.add_middleware(ApiKeyMiddleware)
 
 app.include_router(core_router)
 app.include_router(profile_router)
+app.include_router(network_router)
 app.include_router(gx_router)
 
 

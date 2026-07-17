@@ -10,9 +10,9 @@ seed pack, same code.
 - **Subscriber / end customer** = that tenant's customer, the person who messages in.
 
 Phase briefs live in `phases/`. This README covers **BE-0 — Foundations** (app skeleton,
-API-key auth, the Tenant + Customer Spine, migrations, seed framework) and **BE-1 —
-Spine to Genesys** (the `/gx/` surface, identifier normalization, verify-customer, and
-exported data-action contracts).
+API-key auth, the Tenant + Customer Spine, migrations, seed framework), **BE-1 — Spine
+to Genesys** (the `/gx/` surface, identifier normalization, verify-customer, exported
+data-action contracts), and **BE-2 — Network & Devices** (the WiFi self-healing engine).
 
 ## Requirements
 
@@ -27,6 +27,7 @@ make up        # copies .env.example → .env, builds, starts api + db
 make seed      # seeds the Northwind Mobile pack (idempotent)
 make demo      # the BE-0 curl walkthrough
 make demo-be1  # the BE-1 gx walkthrough
+make demo-be2  # the BE-2 WiFi self-healing walkthrough
 ```
 
 Then:
@@ -104,7 +105,24 @@ superseded row would survive alongside its replacement.
 
 The Northwind pack seeds one tenant plus 10 parties, each with three identities, one
 hashed verification factor (`pin` = `1234`, so demos can assert it), and two contact
-points. Rich telco device data is BE-2.
+points.
+
+### The WiFi demo subscriber
+
+| | |
+| --- | --- |
+| Identifier | `+447700900000` (also resolvable by its email or `NW000000`) |
+| Staged fault | `device_band_stuck` — a steer-eligible phone pinned to 2.4GHz at −78 dBm while the same hub has a quiet 5GHz radio |
+| Second fault | `extender_flapping` — the Upstairs Extender is flapping with backhaul 34 |
+| WAN | Healthy, deliberately: the fault is inside the home |
+| Verify factor | `pin` = `1234` |
+
+Parties 1–3 get healthy networks for realism; the rest have no topology.
+
+The degraded state is **pack data**, not code. BE-2 seeds it directly — generalized
+apply/reset of scenarios is BE-3 — so **`make seed` is what resets a demo** after
+actions have healed the network. `scripts/demo_be2.sh` re-seeds before it runs for
+exactly this reason.
 
 ### Adding a customer
 
@@ -154,14 +172,20 @@ through gx.
 | --- | --- | --- | --- |
 | GET | `/gx/customer-context?identifier=` | `X-API-Key` | `{found, party_id, display_name, tenant_slug, tier, verified, last_channel, id_type_resolved}` |
 | POST | `/gx/verify-customer` | `X-API-Key` | `{verified, party_id, masked_name}` |
+| GET | `/gx/net-diagnostics?identifier=` | `X-API-Key` | The flat fault verdict — see below. |
+| GET | `/gx/net-status?identifier=` | `X-API-Key` | Flat current network state, for confirming recovery. |
+| POST | `/gx/device-action` | `X-API-Key` | `{ok, action, target, result_summary, fault_cleared}` |
 
-Both are 200 on the unhappy path — `found: false` / `verified: false` — so a flow
+Reads are 200 on the unhappy path — `found: false` / `verified: false` — so a flow
 branches on a field instead of handling an error. A wrong factor returns no `party_id`
 and no `masked_name`: the response never reveals whether the subscriber or the factor
 was wrong.
 
 `verified` on `customer-context` is always `false`. Context does not assert identity;
 that is what `verify-customer` is for (**verify-then-context**, per the locked decision).
+
+`device-action` is the exception: a bad request (unknown target, unknown verb, verb that
+does not apply) returns a **flat 4xx** with the same key set, never a 500.
 
 ### `/v1/` — the rich internal surface
 
@@ -171,9 +195,74 @@ that is what `verify-customer` is for (**verify-then-context**, per the locked d
 | GET | `/v1/tenants` | `X-API-Key` | The tenant in scope for this request. |
 | GET | `/v1/parties?identifier=` | `X-API-Key` | Resolve subscribers by exact identity value. |
 | GET | `/v1/profile?identifier=` | `X-API-Key` | The rich rollup that `customer-context` flattens. |
+| GET | `/v1/network?identifier=` | `X-API-Key` | The full home-network graph plus the verdict. |
 
 `/v1` may nest freely. It does **not** normalize identifiers — it is a faithful
 low-level view, and gx owns the messiness.
+
+## Network & Devices (the WiFi engine)
+
+A home network is a graph of gateways, radios, APs and devices — exactly the nested
+shape gx cannot return. So the module runs fault detection internally and
+`net-diagnostics` returns a **flat verdict**, not the topology:
+
+```json
+{
+  "found": true, "party_id": "…",
+  "fault_type": "device_band_stuck",
+  "primary_target": "a2aefbbb-…", "primary_target_kind": "device",
+  "primary_target_label": "Anne's Phone",
+  "recommended_action": "band-steer",
+  "wan_ok": true, "worst_device_band": "2.4", "worst_device_rssi": -78,
+  "extender_status": "flapping"
+}
+```
+
+The verdict *names* the thing to act on, so a flow never walks a topology: pass
+`primary_target` straight back as `device-action`'s `target`.
+
+### Faults
+
+| fault_type | Fires when | Remedy |
+| --- | --- | --- |
+| `wan_degraded` | Gateway `wan_status` is not in `wan_ok_statuses` | `escalate` |
+| `device_band_stuck` | A steer-eligible device is off the target band, at or below `poor_rssi_dbm`, **and** the target band exists on its AP | `band-steer` |
+| `extender_flapping` | An extender is flapping/offline, or its backhaul is at or below `poor_backhaul_quality` | `reboot-extender` |
+| `none` | Nothing fires | — |
+
+Several faults can fire at once; `fault_precedence` config decides which the verdict
+reports. The default order puts `device_band_stuck` ahead of `extender_flapping`
+deliberately: **least disruptive remedy first**, since a band steer is invisible to the
+customer while rebooting an extender drops it. That ordering is what makes the demo run
+band-steer then reboot-extender.
+
+Adding a fault type is a detector plus a name in `fault_precedence` — not a rewrite.
+Every threshold is config (`app/modules/network/config.py` defaults, overridden per
+tenant under `config_json.network`); there are no magic numbers at call sites.
+
+### Verbs
+
+`POST /gx/device-action {identifier, action, target, params}`:
+
+| action | target | Effect |
+| --- | --- | --- |
+| `band-steer` | `device_id` | Moves a steer-eligible device to the target band; rssi recovers by `steer_rssi_gain_db`. |
+| `reboot-extender` | `ap_id` | Extender drops and returns online; backhaul settles. |
+| `reboot-ap` | `ap_id` | Any AP cycles; connected devices reattach. |
+
+Each mutates state, so a follow-up `net-diagnostics` / `net-status` reflects it, and
+`fault_cleared` is computed by re-reading committed state rather than assuming.
+
+New verbs register a handler in `app/modules/network/actions.py` — no new gx route and
+no new Genesys data action.
+
+`params` is an optional **JSON object as a string** (`'{"band":"5"}'`), because a data
+action contract cannot express a nested object. It is unused by the current verbs.
+
+> **reboot-ap and the customer's own session:** rebooting the AP the customer is
+> connected through would drop them. Offering to move them to mobile data and resuming
+> afterwards is Genesys-side choreography (GX-D). The backend just flips the AP
+> offline → online; client connectivity is not modelled here.
 
 ## Identifier normalization
 
@@ -269,11 +358,12 @@ app/
   core/       Tenant + Customer Spine (models, tenancy, hashing, /v1 routes)
   modules/
     profile/  subscriber rollup + /v1/profile
+    network/  WiFi engine: models, config, fault detectors, action verbs, /v1/network
   gx/         flat contract-safe endpoints, normalization, masking, contract exporter
-  seed/       deterministic generator + packs/<tenant>/pack.yaml
+  seed/       deterministic generator + network seeder + packs/<tenant>/pack.yaml
 alembic/      migrations
 contracts/    exported Genesys data actions (generated: make contracts)
-scripts/      demo_be0.sh, demo_be1.sh
+scripts/      demo_be0.sh, demo_be1.sh, demo_be2.sh
 tests/
 phases/       BE-*.md build briefs
 ```

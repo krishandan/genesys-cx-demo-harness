@@ -26,3 +26,19 @@ seed:
   phone_pattern: "+447700901{index:03d}"
   email_domain: example.org
   account_pattern: "AC{index:06d}"
+  # A second tenant with its own degraded network, so cross-tenant action tests can
+  # prove one tenant's target cannot be acted on while scoped to another.
+  network:
+    assign:
+      degraded: [0]
+    profiles:
+      degraded:
+        gateway: {model: Acme Box, wan_status: online, uptime_s: 1000}
+        access_points:
+          - {key: hub, label: Acme Hub, kind: gateway, model: Acme Box, status: online, backhaul_quality: 100}
+          - {key: ext1, label: Acme Extender, kind: extender, model: Acme Point, status: flapping, backhaul_quality: 30}
+        radios:
+          - {ap: hub, band: "2.4", channel: 6, utilization: 50}
+          - {ap: hub, band: "5", channel: 44, utilization: 20}
+        devices:
+          - {key: phone, label: Acme Phone, ap: hub, band: "2.4", rssi: -80, steer_eligible: true}

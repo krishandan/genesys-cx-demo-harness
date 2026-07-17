@@ -6,8 +6,11 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 from app.config import get_settings
-from app.core import models  # noqa: F401  (import registers tables on Base.metadata)
+
+# Importing the model modules registers their tables on Base.metadata.
+from app.core import models  # noqa: F401
 from app.db import Base
+from app.modules.network import models as network_models  # noqa: F401
 
 config = context.config
 

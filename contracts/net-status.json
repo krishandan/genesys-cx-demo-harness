@@ -1,0 +1,121 @@
+{
+  "name": "Backlot - Network Status",
+  "integrationType": "custom-rest-actions",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/net-status?identifier=${input.identifier}",
+      "requestType": "GET",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}",
+        "X-Tenant": "${input.tenant}"
+      },
+      "requestTemplate": "${input.rawRequest}"
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - Network Status input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
+          },
+          "tenant": {
+            "type": "string",
+            "description": "Tenant slug. Leave empty to use the API's default tenant."
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "NetStatusOut output",
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "healthy": {
+            "type": "boolean",
+            "description": "True when no fault is detected."
+          },
+          "fault_type": {
+            "type": "string"
+          },
+          "wan_ok": {
+            "type": "boolean"
+          },
+          "wan_status": {
+            "type": "string"
+          },
+          "gateway_model": {
+            "type": "string"
+          },
+          "gateway_uptime_s": {
+            "type": "integer"
+          },
+          "ap_total": {
+            "type": "integer"
+          },
+          "ap_online": {
+            "type": "integer"
+          },
+          "extender_status": {
+            "type": "string"
+          },
+          "device_total": {
+            "type": "integer"
+          },
+          "devices_on_target_band": {
+            "type": "integer"
+          },
+          "worst_device_label": {
+            "type": "string"
+          },
+          "worst_device_band": {
+            "type": "string"
+          },
+          "worst_device_rssi": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ap_online",
+          "ap_total",
+          "device_total",
+          "devices_on_target_band",
+          "extender_status",
+          "fault_type",
+          "found",
+          "gateway_model",
+          "gateway_uptime_s",
+          "healthy",
+          "party_id",
+          "wan_ok",
+          "wan_status",
+          "worst_device_band",
+          "worst_device_label",
+          "worst_device_rssi"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

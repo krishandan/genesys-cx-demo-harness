@@ -22,7 +22,15 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.config import get_settings
-from app.gx.schemas import CustomerContextOut, VerifyCustomerIn, VerifyCustomerOut
+from app.gx.schemas import (
+    CustomerContextOut,
+    DeviceActionIn,
+    DeviceActionOut,
+    NetDiagnosticsOut,
+    NetStatusOut,
+    VerifyCustomerIn,
+    VerifyCustomerOut,
+)
 
 CONTRACTS_DIR = Path(__file__).resolve().parents[2] / "contracts"
 
@@ -154,6 +162,15 @@ TENANT_INPUT = InputField(
     required=False,
 )
 
+IDENTIFIER_INPUT = InputField(
+    name="identifier",
+    type="string",
+    description=(
+        "Raw identifier: ANI/phone (E.164 or national), email, or account number. "
+        "Normalized server-side, so an unencoded '+' is tolerated."
+    ),
+)
+
 ACTIONS: list[GxAction] = [
     GxAction(
         slug="customer-context",
@@ -162,17 +179,7 @@ ACTIONS: list[GxAction] = [
         path="/gx/customer-context",
         output_model=CustomerContextOut,
         query_params=["identifier"],
-        inputs=[
-            InputField(
-                name="identifier",
-                type="string",
-                description=(
-                    "Raw identifier: ANI/phone (E.164 or national), email, or account "
-                    "number. Normalized server-side, so an unencoded '+' is tolerated."
-                ),
-            ),
-            TENANT_INPUT,
-        ],
+        inputs=[IDENTIFIER_INPUT, TENANT_INPUT],
     ),
     GxAction(
         slug="verify-customer",
@@ -196,6 +203,55 @@ ACTIONS: list[GxAction] = [
                 name="factor_value",
                 type="string",
                 description="The value the caller supplied. Compared as a hash.",
+            ),
+            TENANT_INPUT,
+        ],
+    ),
+    GxAction(
+        slug="net-diagnostics",
+        name="Backlot - Network Diagnostics",
+        method="GET",
+        path="/gx/net-diagnostics",
+        output_model=NetDiagnosticsOut,
+        query_params=["identifier"],
+        inputs=[IDENTIFIER_INPUT, TENANT_INPUT],
+    ),
+    GxAction(
+        slug="net-status",
+        name="Backlot - Network Status",
+        method="GET",
+        path="/gx/net-status",
+        output_model=NetStatusOut,
+        query_params=["identifier"],
+        inputs=[IDENTIFIER_INPUT, TENANT_INPUT],
+    ),
+    GxAction(
+        slug="device-action",
+        name="Backlot - Device Action",
+        method="POST",
+        path="/gx/device-action",
+        output_model=DeviceActionOut,
+        body_fields=list(DeviceActionIn.model_fields),
+        inputs=[
+            IDENTIFIER_INPUT,
+            InputField(
+                name="action",
+                type="string",
+                description="band-steer | reboot-extender | reboot-ap",
+            ),
+            InputField(
+                name="target",
+                type="string",
+                description="device_id or ap_id, taken from net-diagnostics primary_target.",
+            ),
+            InputField(
+                name="params",
+                type="string",
+                description=(
+                    "Optional JSON object as a string, e.g. '{\"band\":\"5\"}'. Leave "
+                    "empty for the default behaviour."
+                ),
+                required=False,
             ),
             TENANT_INPUT,
         ],

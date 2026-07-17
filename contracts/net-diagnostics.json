@@ -1,0 +1,107 @@
+{
+  "name": "Backlot - Network Diagnostics",
+  "integrationType": "custom-rest-actions",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/net-diagnostics?identifier=${input.identifier}",
+      "requestType": "GET",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}",
+        "X-Tenant": "${input.tenant}"
+      },
+      "requestTemplate": "${input.rawRequest}"
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - Network Diagnostics input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
+          },
+          "tenant": {
+            "type": "string",
+            "description": "Tenant slug. Leave empty to use the API's default tenant."
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "NetDiagnosticsOut output",
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "description": "False when the identifier resolves to no subscriber."
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "fault_type": {
+            "type": "string",
+            "description": "device_band_stuck | extender_flapping | wan_degraded | none"
+          },
+          "primary_target": {
+            "type": "string",
+            "description": "Id to pass as device-action target."
+          },
+          "primary_target_kind": {
+            "type": "string",
+            "description": "device | ap | gateway"
+          },
+          "primary_target_label": {
+            "type": "string",
+            "description": "Human name of the target, so a flow need not look it up."
+          },
+          "recommended_action": {
+            "type": "string",
+            "description": "The device-action verb to call: band-steer | reboot-extender | escalate | none"
+          },
+          "wan_ok": {
+            "type": "boolean"
+          },
+          "worst_device_band": {
+            "type": "string"
+          },
+          "worst_device_rssi": {
+            "type": "integer"
+          },
+          "extender_status": {
+            "type": "string",
+            "description": "online | flapping | offline | none"
+          }
+        },
+        "required": [
+          "extender_status",
+          "fault_type",
+          "found",
+          "party_id",
+          "primary_target",
+          "primary_target_kind",
+          "primary_target_label",
+          "recommended_action",
+          "wan_ok",
+          "worst_device_band",
+          "worst_device_rssi"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

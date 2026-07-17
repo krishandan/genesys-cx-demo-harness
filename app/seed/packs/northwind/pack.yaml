@@ -17,7 +17,20 @@ tenant:
     masked_name:
       reveal_chars: 1
       mask_char: "*"
-      mask_length: 3          # fixed run, so the real name length is not leaked
+      mask_length: 3
+    # Network module thresholds. Anything omitted falls back to the module defaults
+    # in app/modules/network/config.py.
+    network:
+      poor_rssi_dbm: -70
+      steer_target_band: "5"
+      steer_rssi_gain_db: 22
+      steer_rssi_ceiling_dbm: -45
+      poor_backhaul_quality: 40
+      healthy_backhaul_quality: 92
+      # Least disruptive remedy first: a band steer is invisible to the customer,
+      # rebooting an extender drops it. This order is what makes the demo run
+      # band-steer before reboot-extender.
+      fault_precedence: [wan_degraded, device_band_stuck, extender_flapping]          # fixed run, so the real name length is not leaked
 
 seed:
   faker_seed: 20260716        # fixed → deterministic re-seed
@@ -36,3 +49,93 @@ seed:
   phone_pattern: "+447700900{index:03d}"
   email_domain: example.net   # RFC 2606 reserved
   account_pattern: "NW{index:06d}"
+
+  # ── Home networks ──────────────────────────────────────────────────────────
+  # The topology is pack data, not code. BE-2 seeds the degraded baseline
+  # directly; generalized apply/reset of scenarios is BE-3, so for now a
+  # re-seed (`make seed`) is what restores this baseline after a demo.
+  network:
+    # party index 0 (+447700900000) is the degraded demo subscriber.
+    assign:
+      degraded: [0]
+      healthy: [1, 2, 3]
+    profiles:
+      degraded:
+        gateway:
+          model: Northwind Hub 6
+          wan_status: online        # WAN is healthy; the fault is inside the home
+          uptime_s: 482913
+        access_points:
+          - key: hub
+            label: Living Room Hub
+            kind: gateway
+            model: Northwind Hub 6
+            status: online
+            backhaul_quality: 100
+          - key: ext1
+            label: Upstairs Extender
+            kind: extender
+            model: Northwind Mesh Point
+            status: flapping        # fault 2: cleared by reboot-extender
+            backhaul_quality: 34
+        radios:
+          - {ap: hub, band: "2.4", channel: 6, utilization: 71}
+          - {ap: hub, band: "5", channel: 44, utilization: 22}
+          - {ap: ext1, band: "2.4", channel: 6, utilization: 64}
+          - {ap: ext1, band: "5", channel: 44, utilization: 18}
+        devices:
+          # fault 1: 5GHz-capable phone pinned to 2.4GHz at poor signal,
+          # while the same hub has a quiet 5GHz radio. Cleared by band-steer.
+          - key: phone
+            label: "{first_name}'s Phone"
+            ap: hub
+            band: "2.4"
+            rssi: -78
+            steer_eligible: true
+          - key: tv
+            label: Living Room TV
+            ap: hub
+            band: "5"
+            rssi: -52
+            steer_eligible: false
+          - key: laptop
+            label: Work Laptop
+            ap: ext1
+            band: "5"
+            rssi: -61
+            steer_eligible: true
+      healthy:
+        gateway:
+          model: Northwind Hub 6
+          wan_status: online
+          uptime_s: 903221
+        access_points:
+          - key: hub
+            label: Living Room Hub
+            kind: gateway
+            model: Northwind Hub 6
+            status: online
+            backhaul_quality: 100
+          - key: ext1
+            label: Upstairs Extender
+            kind: extender
+            model: Northwind Mesh Point
+            status: online
+            backhaul_quality: 96
+        radios:
+          - {ap: hub, band: "2.4", channel: 1, utilization: 18}
+          - {ap: hub, band: "5", channel: 36, utilization: 14}
+          - {ap: ext1, band: "5", channel: 36, utilization: 11}
+        devices:
+          - key: phone
+            label: "{first_name}'s Phone"
+            ap: hub
+            band: "5"
+            rssi: -48
+            steer_eligible: true
+          - key: laptop
+            label: Work Laptop
+            ap: ext1
+            band: "5"
+            rssi: -55
+            steer_eligible: true

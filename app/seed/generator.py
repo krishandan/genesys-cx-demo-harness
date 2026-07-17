@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.hashing import hash_factor
 from app.core.models import ContactPoint, Identity, Party, Tenant, Verification
+from app.seed.network import NetworkCounts, SeedParty, prune_all, seed_networks
 
 PACKS_DIR = Path(__file__).parent / "packs"
 
@@ -38,6 +39,10 @@ class SeedResult:
     identities: int
     verifications: int
     contact_points: int
+    gateways: int = 0
+    access_points: int = 0
+    radios: int = 0
+    devices: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -47,6 +52,10 @@ class SeedResult:
             "identities": self.identities,
             "verifications": self.verifications,
             "contact_points": self.contact_points,
+            "gateways": self.gateways,
+            "access_points": self.access_points,
+            "radios": self.radios,
+            "devices": self.devices,
         }
 
 
@@ -148,11 +157,13 @@ def seed_tenant(db: Session, tenant_slug: str, packs_dir: Path = PACKS_DIR) -> S
     identities = verifications = contact_points = 0
     party_count = int(seed_cfg["party_count"])
     written = _Written(parties=set(), identities=set(), verifications=set(), contact_points=set())
+    seeded_parties: list[SeedParty] = []
 
     for i in range(party_count):
         name = fake.name()
         party_id = _key(slug, "party", str(i))
         written.parties.add(party_id)
+        seeded_parties.append(SeedParty(index=i, party_id=party_id, display_name=name))
 
         db.merge(
             Party(
@@ -216,6 +227,16 @@ def seed_tenant(db: Session, tenant_slug: str, packs_dir: Path = PACKS_DIR) -> S
 
     db.flush()
     _prune(db, tenant_id, written)
+
+    # Home networks, if this pack describes any. Runs after the spine prune so a
+    # topology is never attached to a party that just went away.
+    network_cfg = seed_cfg.get("network")
+    if network_cfg:
+        counts = seed_networks(db, tenant_id, slug, seeded_parties, network_cfg, _key)
+    else:
+        prune_all(db, tenant_id)
+        counts = NetworkCounts()
+
     db.commit()
 
     return SeedResult(
@@ -225,4 +246,8 @@ def seed_tenant(db: Session, tenant_slug: str, packs_dir: Path = PACKS_DIR) -> S
         identities=identities,
         verifications=verifications,
         contact_points=contact_points,
+        gateways=counts.gateways,
+        access_points=counts.access_points,
+        radios=counts.radios,
+        devices=counts.devices,
     )
