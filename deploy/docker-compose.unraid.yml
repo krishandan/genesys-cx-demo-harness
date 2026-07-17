@@ -1,0 +1,119 @@
+# Backlot — unified Unraid deploy stack.
+#
+# One compose, one Docker network, four services: api (FastAPI :8000),
+# db (Postgres 16), web (Next.js :3000), and cloudflared. cloudflared routes the
+# two public hostnames to the internal services over the compose network:
+#
+#     backlot-api.krishharness.com  ->  http://api:8000
+#     backlot-app.krishharness.com  ->  http://web:3000
+#
+# No host ports are published: Postgres stays internal, and api/web are reached
+# only through the tunnel. That is the locked "no exposed ports" deploy shape.
+#
+# ── Build contexts (side-by-side repos) ──────────────────────────────────────
+# This file lives in backlot/deploy/, and Compose resolves relative build
+# contexts from THIS FILE'S directory. So the two repos must sit side by side:
+#
+#     <parent>/backlot/        (api build context = .. )
+#     <parent>/backlot-web/    (web build context = ../../backlot-web )
+#
+# Override WEB_CONTEXT in .env if your layout differs.
+#
+# ── Local vs Unraid ──────────────────────────────────────────────────────────
+# On Unraid: `docker compose -f deploy/docker-compose.unraid.yml up -d --build`
+# brings up all four, always-on.
+#
+# LOCALLY (Part A verification): bring up ONLY the subset, never cloudflared —
+# starting the real tunnel would repoint the production hostnames at your
+# machine. Name the services explicitly and keep CLOUDFLARE_TUNNEL_TOKEN empty:
+#     docker compose -f deploy/docker-compose.unraid.yml up -d --build api db web
+
+name: backlot
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-backlot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-backlot}
+      POSTGRES_DB: ${POSTGRES_DB:-backlot}
+    volumes:
+      # Bind mount (not a named volume) so the data is visible and backup-able on
+      # the Unraid share. PGDATA_PATH is a cache-only appdata path on the box.
+      - ${PGDATA_PATH:-./.data/pgdata}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-backlot} -d ${POSTGRES_DB:-backlot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Internal only — no published port.
+
+  api:
+    build:
+      context: ${API_CONTEXT:-..}
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      API_KEY: ${API_KEY:?set API_KEY in deploy/.env}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in deploy/.env}
+      DEFAULT_TENANT: ${DEFAULT_TENANT:-northwind}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-backlot}:${POSTGRES_PASSWORD:-backlot}@db:5432/${POSTGRES_DB:-backlot}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    # The image CMD runs `alembic upgrade head` before serving, so migrations
+    # apply on start. Seeding is a separate one-shot (see deploy/README.md).
+    healthcheck:
+      test:
+        ["CMD", "python", "-c",
+         "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    # Internal only — cloudflared reaches it at http://api:8000.
+
+  web:
+    build:
+      context: ${WEB_CONTEXT:-../../backlot-web}
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      TENANT: ${TENANT:-northwind}
+      # Internal hop over the compose network — no public round-trip.
+      BACKLOT_BASE_URL: http://api:8000
+      # One key value: the web sends what the api validates. Sourced from the
+      # single API_KEY in .env so the two can never drift.
+      BACKLOT_API_KEY: ${API_KEY:?set API_KEY in deploy/.env}
+    healthcheck:
+      test:
+        ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    # Internal only — cloudflared reaches it at http://web:3000.
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    # Uses the EXISTING tunnel token (no reissue). The tunnel's public-hostname
+    # routes already point backlot-api -> api:8000 and backlot-app -> web:3000.
+    #
+    # No `:?` guard on the token so `config` and the local api/db/web subset work
+    # with it empty. It is REQUIRED for the real deploy: with an empty token
+    # cloudflared cannot connect and the tunnel stays down (see deploy/README.md).
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}

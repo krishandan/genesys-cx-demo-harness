@@ -10,3 +10,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+# Postgres data (local dev + deploy bind mounts). Never commit DB files.
+.data/
+deploy/.data/

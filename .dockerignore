@@ -1,0 +1,17 @@
+# Keep the api build context small. The context is the whole backlot repo, but the
+# image only needs pyproject/app/alembic — everything below is dev-only or huge.
+.git
+.venv
+venv
+.data
+deploy/.data
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+.DS_Store
+.env
+node_modules
+scratchpad
