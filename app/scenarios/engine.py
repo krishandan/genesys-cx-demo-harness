@@ -23,12 +23,14 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from app.core.models import Identity, Party, Tenant
+from app.events.models import Event
 from app.modules.network.models import AccessPoint, ConnectedDevice, Gateway, Radio
+from app.modules.network.telemetry import emit_network_telemetry
 from app.scenarios.models import ScenarioEvent
 from app.seed.generator import PACKS_DIR as SEED_PACKS_DIR
 from app.seed.generator import _key, load_pack
@@ -231,7 +233,12 @@ def reset(
     seed_packs_dir: Path = SEED_PACKS_DIR,
     log: bool = True,
 ) -> ScenarioResult:
-    """Restore the tenant's seeded baseline in place. Idempotent."""
+    """Restore the tenant's seeded baseline in place. Idempotent.
+
+    Clears the tenant's interaction/CSAT/telemetry events too, so a demo restarts from a
+    genuinely clean slate: last_channel derives again and the telemetry feed is empty.
+    The scenario audit log (who applied/reset what) is deliberately kept.
+    """
     pack = load_pack(tenant.slug, seed_packs_dir)
     network_cfg = pack["seed"].get("network")
 
@@ -240,6 +247,8 @@ def reset(
         parties = _baseline_parties(db, tenant, pack)
         counts = seed_networks(db, tenant.tenant_id, tenant.slug, parties, network_cfg, _key)
         rows = counts.gateways + counts.access_points + counts.radios + counts.devices
+
+    db.execute(delete(Event).where(Event.tenant_id == tenant.tenant_id))
 
     summary = f"Restored the seeded baseline for {tenant.slug} ({rows} entities)"
     if log:
@@ -287,6 +296,13 @@ def apply(
 
         result = cast(CursorResult[Any], db.execute(stmt))
         rows += result.rowcount or 0
+
+    db.flush()
+
+    # Telemetry seam: staging a fault raises network.degraded for whoever ends up
+    # faulted. Driven by the resulting verdict, so `healthy`/reset emit nothing.
+    for party_id in party_ids:
+        emit_network_telemetry(db, tenant, party_id, commit=False)
 
     summary = f"Applied '{scenario.name}' to {len(party_ids)} subscriber(s), {rows} rows set"
     _log(db, tenant, "apply", scenario.name, rows, summary)

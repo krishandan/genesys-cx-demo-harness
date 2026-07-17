@@ -10,14 +10,25 @@ from sqlalchemy.orm import Session
 from app.core.models import Tenant
 from app.core.tenancy import CurrentTenant
 from app.db import get_db
+from app.events.models import KIND_CSAT, KIND_INTERACTION
+from app.events.service import (
+    record_event,
+    resolve_last_channel,
+    telemetry_events,
+)
 from app.gx.masking import mask_name
 from app.gx.normalize import normalize_identifier
 from app.gx.schemas import (
+    CsatIn,
+    CsatOut,
     CustomerContextOut,
     DeviceActionIn,
     DeviceActionOut,
+    InteractionEventIn,
+    InteractionEventOut,
     NetDiagnosticsOut,
     NetStatusOut,
+    TelemetryOut,
     VerifyCustomerIn,
     VerifyCustomerOut,
 )
@@ -26,6 +37,8 @@ from app.modules.network.config import network_config
 from app.modules.network.faults import NO_FAULT, build_verdict, detect_all
 from app.modules.network.service import Topology, load_topology
 from app.modules.profile.service import ProfileRollup, check_factor, resolve_profile
+
+CSAT_MIN, CSAT_MAX = 1, 5
 
 router = APIRouter(prefix="/gx", tags=["gx"])
 
@@ -80,7 +93,8 @@ def customer_context(
         tenant_slug=rollup.tenant_slug,
         tier=party.tier or "",
         verified=False,
-        last_channel=rollup.last_channel,
+        # Real interaction history when it exists, else the BE-1 spine derivation.
+        last_channel=resolve_last_channel(db, tenant, party.party_id, rollup.last_channel),
         # What actually matched in the spine, which resolves phone vs msisdn.
         id_type_resolved=rollup.matched_identity.id_type,
     )
@@ -277,3 +291,103 @@ def device_action(
         result_summary=outcome.result_summary,
         fault_cleared=fault_cleared,
     )
+
+
+# ── Events: interaction history, CSAT write-back, telemetry seam ──────────────────────
+
+
+@router.post("/interaction-event", response_model=InteractionEventOut)
+def interaction_event(
+    tenant: CurrentTenant,
+    db: DbDep,
+    payload: InteractionEventIn,
+) -> Any:
+    """Record an interaction. After this, customer-context sources last_channel from it."""
+    base = InteractionEventOut(ok=False)
+    rollup = _resolve(db, tenant, payload.identifier)
+    if rollup is None:
+        return JSONResponse(
+            status_code=404,
+            content=base.model_copy(update={"last_channel": ""}).model_dump(),
+        )
+
+    if not payload.channel.strip():
+        return JSONResponse(status_code=400, content=base.model_dump())
+
+    record_event(
+        db,
+        tenant,
+        rollup.party.party_id,
+        KIND_INTERACTION,
+        channel=payload.channel,
+        payload={"kind": payload.kind},
+    )
+    return InteractionEventOut(
+        ok=True,
+        party_id=str(rollup.party.party_id),
+        stored=True,
+        last_channel=payload.channel,
+    )
+
+
+@router.post("/csat", response_model=CsatOut)
+def csat(
+    tenant: CurrentTenant,
+    db: DbDep,
+    payload: CsatIn,
+) -> Any:
+    """Store a CSAT result written back by Genesys.
+
+    For M1 the gx X-API-Key is sufficient. Third-party webhook signature validation
+    (Open Messaging) is a Demo 4 concern — noted, not built here.
+    """
+    base = CsatOut(ok=False)
+
+    if not (CSAT_MIN <= payload.score <= CSAT_MAX):
+        return JSONResponse(status_code=400, content=base.model_dump())
+
+    rollup = _resolve(db, tenant, payload.identifier)
+    if rollup is None:
+        return JSONResponse(status_code=404, content=base.model_dump())
+
+    record_event(
+        db,
+        tenant,
+        rollup.party.party_id,
+        KIND_CSAT,
+        channel="csat",
+        conversation_ref=payload.conversation_ref,
+        payload={"score": payload.score, "comment": payload.comment},
+    )
+    return CsatOut(ok=True, party_id=str(rollup.party.party_id), stored=True)
+
+
+@router.get("/telemetry", response_model=list[TelemetryOut])
+def telemetry(
+    tenant: CurrentTenant,
+    db: DbDep,
+    identifier: Annotated[str, Query(description="ANI, email, or account number.")],
+) -> list[TelemetryOut]:
+    """The telemetry feed for a subscriber: a top-level array of flat events, newest
+    first. Empty for an unknown or healthy subscriber, so a proactive poll can treat
+    'nothing to do' uniformly. Not consumed by Genesys in M1 — this is the GX-C seam.
+    """
+    rollup = _resolve(db, tenant, identifier)
+    if rollup is None:
+        return []
+
+    events = telemetry_events(db, tenant, rollup.party.party_id)
+    return [
+        TelemetryOut(
+            party_id=str(e.party_id),
+            kind=e.kind,
+            fault_type=str(e.payload.get("fault_type", "")),
+            primary_target=str(e.payload.get("primary_target", "")),
+            primary_target_kind=str(e.payload.get("primary_target_kind", "")),
+            primary_target_label=str(e.payload.get("primary_target_label", "")),
+            recommended_action=str(e.payload.get("recommended_action", "")),
+            conversation_ref=e.conversation_ref,
+            occurred_at=e.occurred_at.isoformat(),
+        )
+        for e in events
+    ]

@@ -12,8 +12,10 @@ seed pack, same code.
 Phase briefs live in `phases/`. This README covers **BE-0 — Foundations** (app skeleton,
 API-key auth, the Tenant + Customer Spine, migrations, seed framework), **BE-1 — Spine
 to Genesys** (the `/gx/` surface, identifier normalization, verify-customer, exported
-data-action contracts), **BE-2 — Network & Devices** (the WiFi self-healing engine), and
-**BE-3 — Scenario engine + admin UI** (stage and reset demo state on command).
+data-action contracts), **BE-2 — Network & Devices** (the WiFi self-healing engine),
+**BE-3 — Scenario engine + admin UI** (stage and reset demo state on command), and
+**BE-4 — Events** (interaction history, CSAT write-back, the telemetry seam). With BE-4
+the **backend gx surface for M1 is complete**.
 
 ## Requirements
 
@@ -30,6 +32,7 @@ make demo      # the BE-0 curl walkthrough
 make demo-be1  # the BE-1 gx walkthrough
 make demo-be2  # the BE-2 WiFi self-healing walkthrough
 make demo-be3  # the BE-3 scenario engine walkthrough
+make demo-be4  # the BE-4 events + CSAT + telemetry walkthrough
 ```
 
 Then:
@@ -185,6 +188,37 @@ scenario reaching across tenants). They also don't redefine detection: the thres
 
 Every apply and reset is recorded in an event log, shown in the admin UI.
 
+## Events (interaction history, CSAT, telemetry)
+
+One generic `event` table: a `kind` string plus a JSONB `payload`, so **a new event kind
+is data, not a migration**. gx responses over events stay flat by projecting the payload
+into scalar fields at the boundary.
+
+- **`POST /gx/interaction-event {identifier, channel, kind}`** records an interaction.
+  After one, `customer-context`'s `last_channel` is sourced from the real interaction
+  history; before any, it falls back to the BE-1 spine derivation (contact point).
+- **`POST /gx/csat {identifier, score, comment, conversation_ref}`** stores a CSAT
+  result. A score outside 1–5 is a flat 4xx. For M1 the gx key is sufficient auth;
+  third-party webhook signature validation (Open Messaging) is a Demo 4 concern, noted
+  but not built.
+- **`GET /gx/telemetry?identifier=`** is the **telemetry seam**: a top-level array of
+  flat `network.degraded` events for a subscriber, newest first. Empty for an unknown or
+  healthy subscriber, so a future proactive poll treats "nothing to do" uniformly. Built
+  and tested; **not consumed by Genesys in M1** — this is the GX-C seam (post-M1, and it
+  needs confirmed box outbound).
+
+Telemetry is emitted by the network module whenever a subscriber ends up faulted — for
+example when a scenario stages `wifi_degraded`. Emission is driven by the fault verdict,
+not by a subscriber id, so `healthy`/reset emit nothing.
+
+`reset` clears the tenant's event store (interactions, CSAT, telemetry) along with
+restoring the network baseline, so each demo take starts from a genuinely clean slate —
+`last_channel` derives again and the telemetry feed is empty. The scenario audit log is
+kept.
+
+The admin UI shows an **Activity** feed (interactions, CSAT, telemetry) alongside the
+scenario log.
+
 ### Adding a customer
 
 Add `app/seed/packs/<slug>/pack.json` and run `python -m app.seed --tenant <slug>`. No
@@ -236,6 +270,9 @@ through gx.
 | GET | `/gx/net-diagnostics?identifier=` | `X-API-Key` | The flat fault verdict — see below. |
 | GET | `/gx/net-status?identifier=` | `X-API-Key` | Flat current network state, for confirming recovery. |
 | POST | `/gx/device-action` | `X-API-Key` | `{ok, action, target, result_summary, fault_cleared}` |
+| POST | `/gx/interaction-event` | `X-API-Key` | Record an interaction → `{ok, party_id, stored, last_channel}` |
+| POST | `/gx/csat` | `X-API-Key` | Write back a CSAT score → `{ok, party_id, stored}` |
+| GET | `/gx/telemetry?identifier=` | `X-API-Key` | The telemetry feed — a **top-level array** of flat events |
 
 Reads are 200 on the unhappy path — `found: false` / `verified: false` — so a flow
 branches on a field instead of handling an error. A wrong factor returns no `party_id`
@@ -257,6 +294,10 @@ does not apply) returns a **flat 4xx** with the same key set, never a 500.
 | GET | `/v1/parties?identifier=` | `X-API-Key` | Resolve subscribers by exact identity value. |
 | GET | `/v1/profile?identifier=` | `X-API-Key` | The rich rollup that `customer-context` flattens. |
 | GET | `/v1/network?identifier=` | `X-API-Key` | The full home-network graph plus the verdict. |
+
+`last_channel` on `customer-context` now prefers real interaction history (see
+[Events](#events-interaction-history-csat-telemetry)); it falls back to the spine
+derivation when a subscriber has no recorded interactions.
 
 `/v1` may nest freely. It does **not** normalize identifiers — it is a faithful
 low-level view, and gx owns the messiness.
@@ -423,12 +464,13 @@ app/
     profile/  subscriber rollup + /v1/profile
     network/  WiFi engine: models, config, fault detectors, action verbs, /v1/network
   gx/         flat contract-safe endpoints, normalization, masking, contract exporter
-  scenarios/  engine + packs/<tenant>/*.yaml + event log
-  admin/      Basic auth, scenario controls, Jinja + htmx UI (htmx vendored)
+  events/     generic event store (kind + JSONB payload); interaction/CSAT/telemetry
+  scenarios/  engine + packs/<tenant>/*.yaml + scenario audit log
+  admin/      Basic auth, scenario controls, activity feed, Jinja + htmx UI (htmx vendored)
   seed/       deterministic generator + network seeder + packs/<tenant>/pack.yaml
 alembic/      migrations
 contracts/    exported Genesys data actions (generated: make contracts)
-scripts/      demo_be0.sh, demo_be1.sh, demo_be2.sh, demo_be3.sh
+scripts/      demo_be0.sh … demo_be4.sh
 tests/
 phases/       BE-*.md build briefs
 ```

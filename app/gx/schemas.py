@@ -105,3 +105,45 @@ class DeviceActionOut(BaseModel):
     target: str = ""
     result_summary: str = ""
     fault_cleared: bool = False
+
+
+class InteractionEventIn(BaseModel):
+    identifier: str
+    channel: str = Field(description="webmessaging | voice | sms | email | ...")
+    kind: str = Field(default="inbound", description="inbound | outbound")
+
+
+class InteractionEventOut(BaseModel):
+    ok: bool
+    party_id: str = ""
+    stored: bool = False
+    # Echoes the channel that customer-context will now report, for convenience.
+    last_channel: str = ""
+
+
+class CsatIn(BaseModel):
+    identifier: str
+    score: int = Field(description="1–5.")
+    comment: str = ""
+    conversation_ref: str = ""
+
+
+class CsatOut(BaseModel):
+    ok: bool
+    party_id: str = ""
+    stored: bool = False
+
+
+class TelemetryOut(BaseModel):
+    """One telemetry event, flat. The feed is a top-level array of these — allowed by
+    the gx rule (an array nested in a property is not; a top-level array is)."""
+
+    party_id: str = ""
+    kind: str = ""
+    fault_type: str = ""
+    primary_target: str = ""
+    primary_target_kind: str = ""
+    primary_target_label: str = ""
+    recommended_action: str = ""
+    conversation_ref: str = ""
+    occurred_at: str = ""

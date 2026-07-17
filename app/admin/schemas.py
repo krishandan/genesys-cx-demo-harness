@@ -34,6 +34,16 @@ class EventOut(BaseModel):
     created_at: datetime
 
 
+class ActivityOut(BaseModel):
+    """An event-store row (interaction, CSAT, telemetry) for the admin feed."""
+
+    kind: str
+    channel: str
+    conversation_ref: str
+    summary: str
+    occurred_at: datetime
+
+
 class SubscriberStateOut(BaseModel):
     party_id: str
     display_name: str

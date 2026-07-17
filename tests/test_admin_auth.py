@@ -18,6 +18,7 @@ ADMIN_ENDPOINTS = [
     ("GET", "/admin/subscribers"),
     ("GET", "/admin/scenarios"),
     ("GET", "/admin/events"),
+    ("GET", "/admin/activity"),
     ("POST", "/admin/scenario/reset"),
 ]
 

@@ -50,7 +50,31 @@
   </section>
 
   <section>
-    <h2>Event log</h2>
+    <h2>Activity — interactions, CSAT, telemetry</h2>
+    <table>
+      <thead>
+        <tr><th>When</th><th>Kind</th><th>Channel</th><th>Detail</th><th>Conversation</th></tr>
+      </thead>
+      <tbody>
+        {% for a in activity %}
+          <tr>
+            <td class="muted"><code>{{ a.occurred_at.strftime("%H:%M:%S") }}</code></td>
+            <td>
+              <span class="pill {% if a.kind == 'network.degraded' %}bad{% elif a.kind == 'csat' %}ok{% else %}none{% endif %}">{{ a.kind }}</span>
+            </td>
+            <td class="muted">{{ a.channel or "—" }}</td>
+            <td class="muted">{{ a.summary }}</td>
+            <td class="muted"><code>{{ a.conversation_ref or "—" }}</code></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">No interactions, CSAT or telemetry yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Scenario log</h2>
     <table>
       <thead>
         <tr><th>When</th><th>Action</th><th>Scenario</th><th>Rows</th><th>Summary</th></tr>

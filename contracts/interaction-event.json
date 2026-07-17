@@ -1,0 +1,82 @@
+{
+  "name": "Backlot - Record Interaction",
+  "integrationType": "custom-rest-actions",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/interaction-event",
+      "requestType": "POST",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}",
+        "X-Tenant": "${input.tenant}",
+        "Content-Type": "application/json"
+      },
+      "requestTemplate": "{\"identifier\": \"${input.identifier}\",\"channel\": \"${input.channel}\",\"kind\": \"${input.kind}\"}"
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - Record Interaction input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
+          },
+          "channel": {
+            "type": "string",
+            "description": "webmessaging | voice | sms | email | ..."
+          },
+          "kind": {
+            "type": "string",
+            "description": "inbound | outbound"
+          },
+          "tenant": {
+            "type": "string",
+            "description": "Tenant slug. Leave empty to use the API's default tenant."
+          }
+        },
+        "required": [
+          "channel",
+          "identifier"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "InteractionEventOut output",
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "boolean"
+          },
+          "last_channel": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "last_channel",
+          "ok",
+          "party_id",
+          "stored"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

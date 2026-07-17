@@ -13,13 +13,14 @@ from sqlalchemy.orm import Session
 
 from app.admin.auth import AdminUser
 from app.admin.schemas import (
+    ActivityOut,
     ApplyIn,
     EventOut,
     ScenarioOut,
     ScenarioResultOut,
     SubscriberStateOut,
 )
-from app.admin.service import subscriber_states
+from app.admin.service import activity_feed, subscriber_states
 from app.core.models import Tenant
 from app.core.tenancy import CurrentTenant
 from app.db import get_db
@@ -113,6 +114,12 @@ def get_events(admin: AdminUser, tenant: CurrentTenant, db: DbDep) -> list[Event
     ]
 
 
+@router.get("/activity", response_model=list[ActivityOut])
+def get_activity(admin: AdminUser, tenant: CurrentTenant, db: DbDep) -> list[ActivityOut]:
+    """Interaction, CSAT and telemetry events (the event store), newest first."""
+    return activity_feed(db, tenant)
+
+
 # ── the thin UI ──────────────────────────────────────────────────────────────────────
 # Excluded from the OpenAPI schema: /docs documents the control surface above, and
 # HTML fragments would only be noise there.
@@ -125,6 +132,7 @@ def _page_context(request: Request, tenant: Tenant, db: Session) -> dict[str, An
         "subscribers": subscriber_states(db, tenant),
         "scenarios": list_scenarios(tenant.slug),
         "events": recent_events(db, tenant),
+        "activity": activity_feed(db, tenant),
     }
 
 

@@ -282,6 +282,49 @@ def test_the_demo_runs_repeatedly_with_no_reseed(db: Session, northwind: Tenant)
 # ── event log ────────────────────────────────────────────────────────────────────────
 
 
+def test_reset_clears_the_tenants_event_store(db: Session, northwind: Tenant) -> None:
+    """A demo restarts clean: interaction/CSAT/telemetry history is wiped on reset."""
+    from app.events.models import Event
+    from app.events.service import record_event
+
+    party_id = _demo_party_id(db, northwind)
+    record_event(db, northwind, party_id, "interaction", channel="voice")
+    apply(db, northwind, "wifi_degraded")  # emits telemetry too
+    assert db.execute(select(Event).where(Event.tenant_id == northwind.tenant_id)).scalars().all()
+
+    reset(db, northwind)
+
+    remaining = db.execute(
+        select(Event).where(Event.tenant_id == northwind.tenant_id)
+    ).scalars().all()
+    assert remaining == []
+
+
+def test_reset_does_not_clear_another_tenants_events(
+    db: Session, northwind: Tenant, seeded_acme: None
+) -> None:
+    from sqlalchemy import select as _select
+
+    from app.core.models import Identity
+    from app.events.models import Event
+    from app.events.service import record_event
+
+    acme = db.execute(select(Tenant).where(Tenant.slug == "acme")).scalar_one()
+    acme_party = db.execute(
+        _select(Identity.party_id).where(
+            Identity.tenant_id == acme.tenant_id, Identity.value == "+447700901000"
+        )
+    ).scalar_one()
+    record_event(db, acme, acme_party, "interaction", channel="sms")
+
+    reset(db, northwind)
+
+    acme_events = db.execute(
+        select(Event).where(Event.tenant_id == acme.tenant_id)
+    ).scalars().all()
+    assert len(acme_events) == 1
+
+
 def test_apply_and_reset_are_logged(db: Session, northwind: Tenant) -> None:
     apply(db, northwind, "wifi_degraded")
     reset(db, northwind)

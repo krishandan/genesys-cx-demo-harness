@@ -23,11 +23,16 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 from app.gx.schemas import (
+    CsatIn,
+    CsatOut,
     CustomerContextOut,
     DeviceActionIn,
     DeviceActionOut,
+    InteractionEventIn,
+    InteractionEventOut,
     NetDiagnosticsOut,
     NetStatusOut,
+    TelemetryOut,
     VerifyCustomerIn,
     VerifyCustomerOut,
 )
@@ -61,6 +66,9 @@ class GxAction:
     inputs: list[InputField]
     query_params: list[str] = field(default_factory=list)
     body_fields: list[str] = field(default_factory=list)
+    # A feed endpoint returns a top-level array of the flat model. Allowed by the gx
+    # rule (a top-level array is fine; an array nested in a property is not).
+    output_is_array: bool = False
 
 
 def _scalar_schema(spec: dict[str, Any], where: str) -> dict[str, Any]:
@@ -76,20 +84,36 @@ def _scalar_schema(spec: dict[str, Any], where: str) -> dict[str, Any]:
     return out
 
 
-def _output_schema(model: type[BaseModel]) -> dict[str, Any]:
+def _object_schema(model: type[BaseModel]) -> dict[str, Any]:
     raw = model.model_json_schema()
     properties = {
         name: _scalar_schema(spec, f"{model.__name__}.{name}")
         for name, spec in raw.get("properties", {}).items()
     }
     return {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "title": f"{model.__name__} output",
         "type": "object",
         "properties": properties,
         # Every field is always present and typed, so a flow binds them unconditionally.
         "required": sorted(properties),
         "additionalProperties": True,
+    }
+
+
+def _output_schema(model: type[BaseModel], is_array: bool = False) -> dict[str, Any]:
+    """The item schema still passes the scalar-only check, so a feed of flat objects is
+    contract-safe while an object holding a nested array is still rejected."""
+    inner = _object_schema(model)
+    if is_array:
+        return {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "title": f"{model.__name__} feed",
+            "type": "array",
+            "items": inner,
+        }
+    return {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": f"{model.__name__} output",
+        **inner,
     }
 
 
@@ -129,8 +153,15 @@ def _request_config(action: GxAction, base_url: str) -> dict[str, Any]:
 
     if action.body_fields:
         headers["Content-Type"] = "application/json"
-        body = ",".join(f'"{f}": "${{input.{f}}}"' for f in action.body_fields)
-        request["requestTemplate"] = "{" + body + "}"
+        types = {i.name: i.type for i in action.inputs}
+        parts = []
+        for f in action.body_fields:
+            # Quote strings; leave integer/number/boolean bare so the JSON body carries
+            # the right type (a CSAT score is an int, not "5").
+            ref = f"${{input.{f}}}"
+            value = ref if types.get(f) in {"integer", "number", "boolean"} else f'"{ref}"'
+            parts.append(f'"{f}": {value}')
+        request["requestTemplate"] = "{" + ",".join(parts) + "}"
 
     return request
 
@@ -150,7 +181,9 @@ def build_action(action: GxAction, base_url: str) -> dict[str, Any]:
         },
         "contract": {
             "input": {"inputSchema": _input_schema(action)},
-            "output": {"successSchema": _output_schema(action.output_model)},
+            "output": {
+                "successSchema": _output_schema(action.output_model, action.output_is_array)
+            },
         },
     }
 
@@ -255,6 +288,56 @@ ACTIONS: list[GxAction] = [
             ),
             TENANT_INPUT,
         ],
+    ),
+    GxAction(
+        slug="interaction-event",
+        name="Backlot - Record Interaction",
+        method="POST",
+        path="/gx/interaction-event",
+        output_model=InteractionEventOut,
+        body_fields=list(InteractionEventIn.model_fields),
+        inputs=[
+            IDENTIFIER_INPUT,
+            InputField(
+                name="channel",
+                type="string",
+                description="webmessaging | voice | sms | email | ...",
+            ),
+            InputField(
+                name="kind", type="string", description="inbound | outbound", required=False
+            ),
+            TENANT_INPUT,
+        ],
+    ),
+    GxAction(
+        slug="csat",
+        name="Backlot - Write CSAT",
+        method="POST",
+        path="/gx/csat",
+        output_model=CsatOut,
+        body_fields=list(CsatIn.model_fields),
+        inputs=[
+            IDENTIFIER_INPUT,
+            InputField(name="score", type="integer", description="1–5."),
+            InputField(name="comment", type="string", description="Free text.", required=False),
+            InputField(
+                name="conversation_ref",
+                type="string",
+                description="Genesys conversation id, for correlation.",
+                required=False,
+            ),
+            TENANT_INPUT,
+        ],
+    ),
+    GxAction(
+        slug="telemetry",
+        name="Backlot - Network Telemetry Feed",
+        method="GET",
+        path="/gx/telemetry",
+        output_model=TelemetryOut,
+        output_is_array=True,
+        query_params=["identifier"],
+        inputs=[IDENTIFIER_INPUT, TENANT_INPUT],
     ),
 ]
 

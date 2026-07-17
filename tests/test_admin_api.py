@@ -144,17 +144,24 @@ def test_ui_reset_swaps_back_to_baseline(client: TestClient, seeded_northwind: N
     r = client.post("/admin/ui/reset", auth=ADMIN)
 
     assert r.status_code == 200
-    assert "device_band_stuck" not in r.text
+    # After reset the demo subscriber reads healthy again. (The telemetry history in the
+    # activity feed still mentions the fault — that is deliberate, so we check the row.)
     assert "healthy" in r.text
+    assert _row(client)["healthy"] is True
 
 
-def test_ui_shows_the_event_log(client: TestClient, seeded_northwind: None) -> None:
+def test_ui_shows_the_scenario_and_activity_logs(
+    client: TestClient, seeded_northwind: None
+) -> None:
     client.post("/admin/ui/apply/wifi_degraded", auth=ADMIN)
 
     body = client.get("/admin/fragments/state", auth=ADMIN).text
 
-    assert "Event log" in body
+    assert "Scenario log" in body
     assert "wifi_degraded" in body
+    # The telemetry emitted by staging shows in the activity feed.
+    assert "Activity" in body
+    assert "network.degraded" in body
 
 
 def test_ui_reports_a_bad_scenario_without_a_500(

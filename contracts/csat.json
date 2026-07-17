@@ -1,0 +1,82 @@
+{
+  "name": "Backlot - Write CSAT",
+  "integrationType": "custom-rest-actions",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/csat",
+      "requestType": "POST",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}",
+        "X-Tenant": "${input.tenant}",
+        "Content-Type": "application/json"
+      },
+      "requestTemplate": "{\"identifier\": \"${input.identifier}\",\"score\": ${input.score},\"comment\": \"${input.comment}\",\"conversation_ref\": \"${input.conversation_ref}\"}"
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - Write CSAT input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
+          },
+          "score": {
+            "type": "integer",
+            "description": "1\u20135."
+          },
+          "comment": {
+            "type": "string",
+            "description": "Free text."
+          },
+          "conversation_ref": {
+            "type": "string",
+            "description": "Genesys conversation id, for correlation."
+          },
+          "tenant": {
+            "type": "string",
+            "description": "Tenant slug. Leave empty to use the API's default tenant."
+          }
+        },
+        "required": [
+          "identifier",
+          "score"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "CsatOut output",
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "party_id",
+          "stored"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}
