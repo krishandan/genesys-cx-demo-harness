@@ -17,7 +17,7 @@ if [[ -f .env ]]; then
 fi
 API_KEY="${API_KEY:-dev-local-key-change-me}"
 SEED_PHONE="${SEED_PHONE:-+447700900000}"
-SEED_PIN="${SEED_PIN:-1234}"
+SEED_PIN="${SEED_PIN:-24680}"  # 5 digits since BE-5
 
 pass=0
 fail=0
