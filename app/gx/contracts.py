@@ -22,6 +22,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.config import get_settings
+from app.gx.ava import validate_contract
 from app.gx.schemas import (
     CsatIn,
     CsatOut,
@@ -135,20 +136,20 @@ def _input_schema(action: GxAction) -> dict[str, Any]:
 def _request_config(action: GxAction, base_url: str) -> dict[str, Any]:
     url = f"{base_url}{action.path}"
     if action.query_params:
-        query = "&".join(f"{p}=${{input.{p}}}" for p in action.query_params)
+        # esc.url percent-encodes the value. Without it a '+' in an E.164 number
+        # decodes to a space server-side and the lookup silently resolves nothing.
+        query = "&".join(f"{p}=${{esc.url(input.{p})}}" for p in action.query_params)
         url = f"{url}?{query}"
 
-    headers = {
-        "X-API-Key": "${credentials.apiKey}",
-        # Empty resolves to the API's DEFAULT_TENANT, so single-tenant flows can ignore it.
-        "X-Tenant": "${input.tenant}",
-    }
+    # No X-Tenant header: it was bound to an optional input, and an unsupplied optional
+    # renders the literal "${input.tenant}" in Velocity, which breaks the lookup. The box
+    # is single-tenant, so DEFAULT_TENANT covers it. (BE-6 re-adds it as *required*.)
+    headers = {"X-API-Key": "${credentials.apiKey}"}
 
     request: dict[str, Any] = {
         "requestUrlTemplate": url,
         "requestType": action.method,
         "headers": headers,
-        "requestTemplate": "${input.rawRequest}",
     }
 
     if action.body_fields:
@@ -156,20 +157,26 @@ def _request_config(action: GxAction, base_url: str) -> dict[str, Any]:
         types = {i.name: i.type for i in action.inputs}
         parts = []
         for f in action.body_fields:
-            # Quote strings; leave integer/number/boolean bare so the JSON body carries
-            # the right type (a CSAT score is an int, not "5").
-            ref = f"${{input.{f}}}"
-            value = ref if types.get(f) in {"integer", "number", "boolean"} else f'"{ref}"'
+            # Quote strings and run them through esc.jsonString so a quote or backslash
+            # in user input cannot break out of the JSON body. Leave integer/number/
+            # boolean bare so the body carries the right type (a CSAT score is an int).
+            if types.get(f) in {"integer", "number", "boolean"}:
+                value = f"${{input.{f}}}"
+            else:
+                value = f'"${{esc.jsonString(input.{f})}}"'
             parts.append(f'"{f}": {value}')
         request["requestTemplate"] = "{" + ",".join(parts) + "}"
 
+    # A GET has no body, so requestTemplate is spurious there and is left off entirely.
     return request
 
 
 def build_action(action: GxAction, base_url: str) -> dict[str, Any]:
-    return {
+    definition = {
         "name": action.name,
         "integrationType": "custom-rest-actions",
+        # Genesys rejects the import without an explicit actionType.
+        "actionType": "custom",
         "secure": False,
         "config": {
             "request": _request_config(action, base_url),
@@ -187,13 +194,10 @@ def build_action(action: GxAction, base_url: str) -> dict[str, Any]:
         },
     }
 
+    # Fail generation rather than shipping a contract AVA would silently reject.
+    validate_contract(definition, action.slug)
+    return definition
 
-TENANT_INPUT = InputField(
-    name="tenant",
-    type="string",
-    description="Tenant slug. Leave empty to use the API's default tenant.",
-    required=False,
-)
 
 IDENTIFIER_INPUT = InputField(
     name="identifier",
@@ -212,7 +216,7 @@ ACTIONS: list[GxAction] = [
         path="/gx/customer-context",
         output_model=CustomerContextOut,
         query_params=["identifier"],
-        inputs=[IDENTIFIER_INPUT, TENANT_INPUT],
+        inputs=[IDENTIFIER_INPUT],
     ),
     GxAction(
         slug="verify-customer",
@@ -237,7 +241,6 @@ ACTIONS: list[GxAction] = [
                 type="string",
                 description="The value the caller supplied. Compared as a hash.",
             ),
-            TENANT_INPUT,
         ],
     ),
     GxAction(
@@ -247,7 +250,7 @@ ACTIONS: list[GxAction] = [
         path="/gx/net-diagnostics",
         output_model=NetDiagnosticsOut,
         query_params=["identifier"],
-        inputs=[IDENTIFIER_INPUT, TENANT_INPUT],
+        inputs=[IDENTIFIER_INPUT],
     ),
     GxAction(
         slug="net-status",
@@ -256,7 +259,7 @@ ACTIONS: list[GxAction] = [
         path="/gx/net-status",
         output_model=NetStatusOut,
         query_params=["identifier"],
-        inputs=[IDENTIFIER_INPUT, TENANT_INPUT],
+        inputs=[IDENTIFIER_INPUT],
     ),
     GxAction(
         slug="device-action",
@@ -286,7 +289,6 @@ ACTIONS: list[GxAction] = [
                 ),
                 required=False,
             ),
-            TENANT_INPUT,
         ],
     ),
     GxAction(
@@ -306,7 +308,6 @@ ACTIONS: list[GxAction] = [
             InputField(
                 name="kind", type="string", description="inbound | outbound", required=False
             ),
-            TENANT_INPUT,
         ],
     ),
     GxAction(
@@ -326,7 +327,6 @@ ACTIONS: list[GxAction] = [
                 description="Genesys conversation id, for correlation.",
                 required=False,
             ),
-            TENANT_INPUT,
         ],
     ),
     GxAction(
@@ -337,7 +337,7 @@ ACTIONS: list[GxAction] = [
         output_model=TelemetryOut,
         output_is_array=True,
         query_params=["identifier"],
-        inputs=[IDENTIFIER_INPUT, TENANT_INPUT],
+        inputs=[IDENTIFIER_INPUT],
     ),
 ]
 

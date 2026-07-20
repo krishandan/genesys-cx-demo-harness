@@ -1,6 +1,7 @@
 {
   "name": "Backlot - Verify Customer",
   "integrationType": "custom-rest-actions",
+  "actionType": "custom",
   "secure": false,
   "config": {
     "request": {
@@ -8,10 +9,9 @@
       "requestType": "POST",
       "headers": {
         "X-API-Key": "${credentials.apiKey}",
-        "X-Tenant": "${input.tenant}",
         "Content-Type": "application/json"
       },
-      "requestTemplate": "{\"identifier\": \"${input.identifier}\",\"factor_type\": \"${input.factor_type}\",\"factor_value\": \"${input.factor_value}\"}"
+      "requestTemplate": "{\"identifier\": \"${esc.jsonString(input.identifier)}\",\"factor_type\": \"${esc.jsonString(input.factor_type)}\",\"factor_value\": \"${esc.jsonString(input.factor_value)}\"}"
     },
     "response": {
       "translationMap": {},
@@ -37,10 +37,6 @@
           "factor_value": {
             "type": "string",
             "description": "The value the caller supplied. Compared as a hash."
-          },
-          "tenant": {
-            "type": "string",
-            "description": "Tenant slug. Leave empty to use the API's default tenant."
           }
         },
         "required": [
@@ -58,13 +54,16 @@
         "type": "object",
         "properties": {
           "verified": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True only when the supplied factor matched. If false, identity is not confirmed \u2014 do not disclose or change account details."
           },
           "party_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Internal subscriber id, empty unless verified. Never read it aloud."
           },
           "masked_name": {
-            "type": "string"
+            "type": "string",
+            "description": "The subscriber's name with most letters masked, e.g. 'A*** C***'. Safe to use to confirm who verified without reciting their full name."
           }
         },
         "required": [

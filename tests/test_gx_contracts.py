@@ -79,12 +79,63 @@ def test_contract_is_importable_shape(slug: str) -> None:
 
     assert definition["name"]
     assert definition["integrationType"] == "custom-rest-actions"
+    # Genesys rejects the import outright without an explicit actionType.
+    assert definition["actionType"] == "custom"
     request = definition["config"]["request"]
     assert request["requestUrlTemplate"].startswith("https://")
     assert request["requestType"] in {"GET", "POST"}
     # The key comes from the integration's credential, never from a flow.
     assert request["headers"]["X-API-Key"] == "${credentials.apiKey}"
     assert definition["config"]["response"]["successTemplate"] == "${rawResult}"
+
+
+@pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
+def test_no_tenant_input_or_header(slug: str) -> None:
+    """An unsupplied optional input renders the literal '${input.tenant}' in Velocity
+    and breaks the lookup. Single-tenant box: DEFAULT_TENANT covers it."""
+    definition = build_all()[slug]
+
+    assert "tenant" not in definition["contract"]["input"]["inputSchema"]["properties"]
+    assert "X-Tenant" not in definition["config"]["request"]["headers"]
+
+
+@pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
+def test_query_params_are_url_escaped(slug: str) -> None:
+    """Without esc.url a '+' in an E.164 number decodes to a space server-side."""
+    action = next(a for a in ACTIONS if a.slug == slug)
+    url = build_all()[slug]["config"]["request"]["requestUrlTemplate"]
+
+    for param in action.query_params:
+        assert f"{param}=${{esc.url(input.{param})}}" in url
+
+
+@pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
+def test_get_actions_carry_no_request_body(slug: str) -> None:
+    definition = build_all()[slug]
+    request = definition["config"]["request"]
+
+    if request["requestType"] == "GET":
+        assert "requestTemplate" not in request
+
+
+@pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
+def test_post_bodies_escape_string_fields(slug: str) -> None:
+    """esc.jsonString stops a quote in user input breaking out of the JSON body;
+    numeric and boolean fields stay unquoted so the body carries the right type."""
+    action = next(a for a in ACTIONS if a.slug == slug)
+    definition = build_all()[slug]
+    request = definition["config"]["request"]
+
+    if not action.body_fields:
+        return
+
+    template = request["requestTemplate"]
+    types = {i.name: i.type for i in action.inputs}
+    for field_name in action.body_fields:
+        if types.get(field_name) in {"integer", "number", "boolean"}:
+            assert f'"{field_name}": ${{input.{field_name}}}' in template
+        else:
+            assert f'"{field_name}": "${{esc.jsonString(input.{field_name})}}"' in template
 
 
 def test_base_url_is_config_not_a_literal() -> None:

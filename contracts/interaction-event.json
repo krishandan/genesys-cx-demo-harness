@@ -1,6 +1,7 @@
 {
   "name": "Backlot - Record Interaction",
   "integrationType": "custom-rest-actions",
+  "actionType": "custom",
   "secure": false,
   "config": {
     "request": {
@@ -8,10 +9,9 @@
       "requestType": "POST",
       "headers": {
         "X-API-Key": "${credentials.apiKey}",
-        "X-Tenant": "${input.tenant}",
         "Content-Type": "application/json"
       },
-      "requestTemplate": "{\"identifier\": \"${input.identifier}\",\"channel\": \"${input.channel}\",\"kind\": \"${input.kind}\"}"
+      "requestTemplate": "{\"identifier\": \"${esc.jsonString(input.identifier)}\",\"channel\": \"${esc.jsonString(input.channel)}\",\"kind\": \"${esc.jsonString(input.kind)}\"}"
     },
     "response": {
       "translationMap": {},
@@ -37,10 +37,6 @@
           "kind": {
             "type": "string",
             "description": "inbound | outbound"
-          },
-          "tenant": {
-            "type": "string",
-            "description": "Tenant slug. Leave empty to use the API's default tenant."
           }
         },
         "required": [
@@ -57,16 +53,20 @@
         "type": "object",
         "properties": {
           "ok": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the interaction was recorded."
           },
           "party_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Internal subscriber id. Never read it aloud."
           },
           "stored": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the event was persisted."
           },
           "last_channel": {
-            "type": "string"
+            "type": "string",
+            "description": "The channel customer-context will now report for this subscriber."
           }
         },
         "required": [

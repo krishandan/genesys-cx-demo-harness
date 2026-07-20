@@ -1,6 +1,7 @@
 {
   "name": "Backlot - Device Action",
   "integrationType": "custom-rest-actions",
+  "actionType": "custom",
   "secure": false,
   "config": {
     "request": {
@@ -8,10 +9,9 @@
       "requestType": "POST",
       "headers": {
         "X-API-Key": "${credentials.apiKey}",
-        "X-Tenant": "${input.tenant}",
         "Content-Type": "application/json"
       },
-      "requestTemplate": "{\"identifier\": \"${input.identifier}\",\"action\": \"${input.action}\",\"target\": \"${input.target}\",\"params\": \"${input.params}\"}"
+      "requestTemplate": "{\"identifier\": \"${esc.jsonString(input.identifier)}\",\"action\": \"${esc.jsonString(input.action)}\",\"target\": \"${esc.jsonString(input.target)}\",\"params\": \"${esc.jsonString(input.params)}\"}"
     },
     "response": {
       "translationMap": {},
@@ -41,10 +41,6 @@
           "params": {
             "type": "string",
             "description": "Optional JSON object as a string, e.g. '{\"band\":\"5\"}'. Leave empty for the default behaviour."
-          },
-          "tenant": {
-            "type": "string",
-            "description": "Tenant slug. Leave empty to use the API's default tenant."
           }
         },
         "required": [
@@ -62,19 +58,24 @@
         "type": "object",
         "properties": {
           "ok": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the action was applied. False means nothing changed."
           },
           "action": {
-            "type": "string"
+            "type": "string",
+            "description": "The verb that was run."
           },
           "target": {
-            "type": "string"
+            "type": "string",
+            "description": "The id that was acted on."
           },
           "result_summary": {
-            "type": "string"
+            "type": "string",
+            "description": "Plain-English description of what changed, safe to paraphrase to the customer. On failure, why it did not run."
           },
           "fault_cleared": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the fault this action targeted is now gone. If false, a fault remains \u2014 call net-diagnostics again to see what is left."
           }
         },
         "required": [

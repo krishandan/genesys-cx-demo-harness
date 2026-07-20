@@ -1,6 +1,7 @@
 {
   "name": "Backlot - Write CSAT",
   "integrationType": "custom-rest-actions",
+  "actionType": "custom",
   "secure": false,
   "config": {
     "request": {
@@ -8,10 +9,9 @@
       "requestType": "POST",
       "headers": {
         "X-API-Key": "${credentials.apiKey}",
-        "X-Tenant": "${input.tenant}",
         "Content-Type": "application/json"
       },
-      "requestTemplate": "{\"identifier\": \"${input.identifier}\",\"score\": ${input.score},\"comment\": \"${input.comment}\",\"conversation_ref\": \"${input.conversation_ref}\"}"
+      "requestTemplate": "{\"identifier\": \"${esc.jsonString(input.identifier)}\",\"score\": ${input.score},\"comment\": \"${esc.jsonString(input.comment)}\",\"conversation_ref\": \"${esc.jsonString(input.conversation_ref)}\"}"
     },
     "response": {
       "translationMap": {},
@@ -41,10 +41,6 @@
           "conversation_ref": {
             "type": "string",
             "description": "Genesys conversation id, for correlation."
-          },
-          "tenant": {
-            "type": "string",
-            "description": "Tenant slug. Leave empty to use the API's default tenant."
           }
         },
         "required": [
@@ -61,13 +57,16 @@
         "type": "object",
         "properties": {
           "ok": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the satisfaction score was accepted."
           },
           "party_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Internal subscriber id. Never read it aloud."
           },
           "stored": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the score was persisted."
           }
         },
         "required": [

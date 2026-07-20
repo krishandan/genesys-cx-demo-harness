@@ -1,16 +1,15 @@
 {
   "name": "Backlot - Get Customer Context",
   "integrationType": "custom-rest-actions",
+  "actionType": "custom",
   "secure": false,
   "config": {
     "request": {
-      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/customer-context?identifier=${input.identifier}",
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/customer-context?identifier=${esc.url(input.identifier)}",
       "requestType": "GET",
       "headers": {
-        "X-API-Key": "${credentials.apiKey}",
-        "X-Tenant": "${input.tenant}"
-      },
-      "requestTemplate": "${input.rawRequest}"
+        "X-API-Key": "${credentials.apiKey}"
+      }
     },
     "response": {
       "translationMap": {},
@@ -28,10 +27,6 @@
           "identifier": {
             "type": "string",
             "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
-          },
-          "tenant": {
-            "type": "string",
-            "description": "Tenant slug. Leave empty to use the API's default tenant."
           }
         },
         "required": [
@@ -52,27 +47,31 @@
           },
           "party_id": {
             "type": "string",
-            "description": "Empty when not found."
+            "description": "Internal subscriber id. Pass to other tools; never read it aloud."
           },
           "display_name": {
-            "type": "string"
+            "type": "string",
+            "description": "The subscriber's full name, for greeting them."
           },
           "tenant_slug": {
-            "type": "string"
+            "type": "string",
+            "description": "The brand this subscriber belongs to, e.g. northwind."
           },
           "tier": {
-            "type": "string"
+            "type": "string",
+            "description": "Account tier: bronze, silver or gold. Higher tiers may warrant more latitude."
           },
           "verified": {
             "type": "boolean",
-            "description": "Always false here; verification is a separate verify-customer call."
+            "description": "Always false here. Identity is NOT yet confirmed \u2014 call verify-customer with a PIN before doing anything account-specific."
           },
           "last_channel": {
-            "type": "string"
+            "type": "string",
+            "description": "The channel this subscriber last contacted us on, e.g. webmessaging, sms, voice."
           },
           "id_type_resolved": {
             "type": "string",
-            "description": "phone | email | account_no | msisdn | unrecognized"
+            "description": "What the identifier matched: phone, email, account_no, msisdn, or unrecognized when it could not be parsed."
           }
         },
         "required": [

@@ -1,16 +1,15 @@
 {
   "name": "Backlot - Network Telemetry Feed",
   "integrationType": "custom-rest-actions",
+  "actionType": "custom",
   "secure": false,
   "config": {
     "request": {
-      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/telemetry?identifier=${input.identifier}",
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/telemetry?identifier=${esc.url(input.identifier)}",
       "requestType": "GET",
       "headers": {
-        "X-API-Key": "${credentials.apiKey}",
-        "X-Tenant": "${input.tenant}"
-      },
-      "requestTemplate": "${input.rawRequest}"
+        "X-API-Key": "${credentials.apiKey}"
+      }
     },
     "response": {
       "translationMap": {},
@@ -28,10 +27,6 @@
           "identifier": {
             "type": "string",
             "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
-          },
-          "tenant": {
-            "type": "string",
-            "description": "Tenant slug. Leave empty to use the API's default tenant."
           }
         },
         "required": [
@@ -49,31 +44,40 @@
           "type": "object",
           "properties": {
             "party_id": {
-              "type": "string"
+              "type": "string",
+              "description": "Internal subscriber id the event belongs to."
             },
             "kind": {
-              "type": "string"
+              "type": "string",
+              "description": "Event kind, e.g. network.degraded."
             },
             "fault_type": {
-              "type": "string"
+              "type": "string",
+              "description": "The fault detected when this event was raised."
             },
             "primary_target": {
-              "type": "string"
+              "type": "string",
+              "description": "Opaque id of the affected thing. Never read it aloud."
             },
             "primary_target_kind": {
-              "type": "string"
+              "type": "string",
+              "description": "What the target is: device, ap, or gateway."
             },
             "primary_target_label": {
-              "type": "string"
+              "type": "string",
+              "description": "Human name of the affected thing."
             },
             "recommended_action": {
-              "type": "string"
+              "type": "string",
+              "description": "The verb that would remedy this fault."
             },
             "conversation_ref": {
-              "type": "string"
+              "type": "string",
+              "description": "Genesys conversation id, when the event came from one."
             },
             "occurred_at": {
-              "type": "string"
+              "type": "string",
+              "description": "ISO-8601 timestamp of when the event was raised."
             }
           },
           "required": [
