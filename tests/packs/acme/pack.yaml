@@ -41,4 +41,4 @@ seed:
           - {ap: hub, band: "2.4", channel: 6, utilization: 50}
           - {ap: hub, band: "5", channel: 44, utilization: 20}
         devices:
-          - {key: phone, label: Acme Phone, ap: hub, band: "2.4", rssi: -80, steer_eligible: true}
+          - {key: phone, label: Acme Phone, kind: phone, ap: hub, band: "2.4", rssi: -80, steer_eligible: true}

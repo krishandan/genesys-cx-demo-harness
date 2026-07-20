@@ -1,0 +1,81 @@
+{
+  "name": "Backlot - Get Best Offer",
+  "integrationType": "custom-rest-actions",
+  "actionType": "custom",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/offers?identifier=${esc.url(input.identifier)}",
+      "requestType": "GET",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}"
+      }
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - Get Best Offer input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "OffersOut output",
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "description": "False when the identifier resolves to no subscriber with a network."
+          },
+          "eligible": {
+            "type": "boolean",
+            "description": "True when there is an offer worth making. When false there is no suitable upgrade \u2014 do not invent one, and do not pressure the customer."
+          },
+          "offer_id": {
+            "type": "string",
+            "description": "Id of the offer. Pass it to order-action 'place' as target."
+          },
+          "name": {
+            "type": "string",
+            "description": "The offer's name, e.g. 'Northwind Mesh Pro'."
+          },
+          "price_gbp": {
+            "type": "number",
+            "description": "Monthly price in pounds. Always state this before ordering."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why this customer specifically would benefit, in plain English. Use this to explain the recommendation rather than making up a reason."
+          }
+        },
+        "required": [
+          "eligible",
+          "found",
+          "name",
+          "offer_id",
+          "price_gbp",
+          "reason"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

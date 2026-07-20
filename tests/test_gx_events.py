@@ -176,7 +176,7 @@ def test_staging_the_fault_emits_telemetry(
     event = feed[0]
     assert event["kind"] == "network.degraded"
     assert event["fault_type"] == "device_band_stuck"
-    assert event["primary_target_label"] == "Anne's Phone"
+    assert event["primary_target_label"] == "Ella's iPad"
     assert event["recommended_action"] == "band-steer"
 
 

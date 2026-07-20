@@ -12,6 +12,7 @@ from app.core import models  # noqa: F401
 from app.db import Base
 from app.events import models as event_models  # noqa: F401
 from app.modules.network import models as network_models  # noqa: F401
+from app.modules.orders import models as order_models  # noqa: F401
 from app.scenarios import models as scenario_models  # noqa: F401
 
 config = context.config

@@ -1,0 +1,107 @@
+{
+  "name": "Backlot - Order Action",
+  "integrationType": "custom-rest-actions",
+  "actionType": "custom",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/order-action",
+      "requestType": "POST",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}",
+        "Content-Type": "application/json"
+      },
+      "requestTemplate": "{\"identifier\": \"${esc.jsonString(input.identifier)}\",\"action\": \"${esc.jsonString(input.action)}\",\"target\": \"${esc.jsonString(input.target)}\",\"params\": \"${esc.jsonString(input.params)}\"}"
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - Order Action input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
+          },
+          "action": {
+            "type": "string",
+            "description": "place (order an offer) | send-confirmation (email the confirmation)"
+          },
+          "target": {
+            "type": "string",
+            "description": "For place: the offer_id from get-offers. For send-confirmation: the order_id returned by place."
+          },
+          "params": {
+            "type": "string",
+            "description": "Optional JSON object as a string. Leave empty."
+          }
+        },
+        "required": [
+          "action",
+          "identifier",
+          "target"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "OrderActionOut output",
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "True when the action succeeded. False means nothing was ordered or sent."
+          },
+          "action": {
+            "type": "string",
+            "description": "The verb that was run."
+          },
+          "order_id": {
+            "type": "string",
+            "description": "The order's id. After 'place', pass this to 'send-confirmation' as target."
+          },
+          "status": {
+            "type": "string",
+            "description": "Order state: placed, confirmed or cancelled."
+          },
+          "eta_text": {
+            "type": "string",
+            "description": "When the customer can expect it, in plain English. Safe to say as-is."
+          },
+          "sent_to_masked": {
+            "type": "string",
+            "description": "Masked address the confirmation went to, e.g. 'a\u2022\u2022\u2022\u2022@example.net'. Use it to confirm where it went without reciting the full address."
+          },
+          "message_ref": {
+            "type": "string",
+            "description": "Reference for the confirmation message, if the customer asks."
+          },
+          "result_summary": {
+            "type": "string",
+            "description": "Plain-English description of what happened, safe to paraphrase. On failure, why it did not run."
+          }
+        },
+        "required": [
+          "action",
+          "eta_text",
+          "message_ref",
+          "ok",
+          "order_id",
+          "result_summary",
+          "sent_to_masked",
+          "status"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

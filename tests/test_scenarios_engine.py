@@ -40,11 +40,12 @@ def _demo_party_id(db: Session, tenant: Tenant):
     ).scalar_one()
 
 
-def _phone(db: Session, tenant: Tenant) -> ConnectedDevice:
+def _ipad(db: Session, tenant: Tenant) -> ConnectedDevice:
+    """The device wifi_degraded faults — named, so the demo narrative lands."""
     return db.execute(
         select(ConnectedDevice).where(
             ConnectedDevice.tenant_id == tenant.tenant_id,
-            ConnectedDevice.seed_key == "phone",
+            ConnectedDevice.seed_key == "ipad",
             ConnectedDevice.party_id == _demo_party_id(db, tenant),
         )
     ).scalar_one()
@@ -159,9 +160,9 @@ def test_apply_wifi_degraded_stages_the_demo_fault(db: Session, northwind: Tenan
     # Band-stuck first, per fault_precedence. That is the demo's opening move.
     assert _fault(db, northwind) == "device_band_stuck"
 
-    phone = _phone(db, northwind)
-    assert phone.band == "2.4"
-    assert phone.rssi == -78
+    ipad = _ipad(db, northwind)
+    assert ipad.band == "2.4"
+    assert ipad.rssi == -78
 
 
 def test_reset_restores_the_baseline(db: Session, northwind: Tenant) -> None:
@@ -171,9 +172,9 @@ def test_reset_restores_the_baseline(db: Session, northwind: Tenant) -> None:
     reset(db, northwind)
 
     assert _fault(db, northwind) == NO_FAULT
-    phone = _phone(db, northwind)
-    assert phone.band == "5"
-    assert phone.rssi == -48
+    ipad = _ipad(db, northwind)
+    assert ipad.band == "5"
+    assert ipad.rssi == -55  # the iPad's healthy baseline
 
 
 def test_apply_is_idempotent(db: Session, northwind: Tenant) -> None:
@@ -197,10 +198,10 @@ def test_apply_recovers_from_a_half_healed_state(db: Session, northwind: Tenant)
     apply(db, northwind, "wifi_degraded")
 
     # Simulate the operator having run only half the demo.
-    phone = _phone(db, northwind)
-    phone.band = "5"
-    phone.rssi = -56
-    db.add(phone)
+    ipad = _ipad(db, northwind)
+    ipad.band = "5"
+    ipad.rssi = -56
+    db.add(ipad)
     db.commit()
 
     apply(db, northwind, "wifi_degraded")

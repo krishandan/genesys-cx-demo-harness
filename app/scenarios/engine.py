@@ -31,6 +31,7 @@ from app.core.models import Identity, Party, Tenant
 from app.events.models import Event
 from app.modules.network.models import AccessPoint, ConnectedDevice, Gateway, Radio
 from app.modules.network.telemetry import emit_network_telemetry
+from app.modules.orders.models import CustomerOrder
 from app.scenarios.models import ScenarioEvent
 from app.seed.generator import PACKS_DIR as SEED_PACKS_DIR
 from app.seed.generator import _key, load_pack
@@ -235,9 +236,10 @@ def reset(
 ) -> ScenarioResult:
     """Restore the tenant's seeded baseline in place. Idempotent.
 
-    Clears the tenant's interaction/CSAT/telemetry events too, so a demo restarts from a
-    genuinely clean slate: last_channel derives again and the telemetry feed is empty.
-    The scenario audit log (who applied/reset what) is deliberately kept.
+    Clears the tenant's interaction/CSAT/telemetry events and any orders too, so a demo
+    restarts from a genuinely clean slate: last_channel derives again, the telemetry feed
+    is empty, and the next take can place the same order without hitting the idempotency
+    guard. The scenario audit log (who applied/reset what) is deliberately kept.
     """
     pack = load_pack(tenant.slug, seed_packs_dir)
     network_cfg = pack["seed"].get("network")
@@ -249,6 +251,9 @@ def reset(
         rows = counts.gateways + counts.access_points + counts.radios + counts.devices
 
     db.execute(delete(Event).where(Event.tenant_id == tenant.tenant_id))
+    # Orders are demo state too: without this, take 2 would find take 1's order and
+    # `place` would idempotently return it instead of creating a fresh one.
+    db.execute(delete(CustomerOrder).where(CustomerOrder.tenant_id == tenant.tenant_id))
 
     summary = f"Restored the seeded baseline for {tenant.slug} ({rows} entities)"
     if log:

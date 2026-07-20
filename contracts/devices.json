@@ -1,0 +1,94 @@
+{
+  "name": "Backlot - List Devices",
+  "integrationType": "custom-rest-actions",
+  "actionType": "custom",
+  "secure": false,
+  "config": {
+    "request": {
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/devices?identifier=${esc.url(input.identifier)}",
+      "requestType": "GET",
+      "headers": {
+        "X-API-Key": "${credentials.apiKey}"
+      }
+    },
+    "response": {
+      "translationMap": {},
+      "translationMapDefaults": {},
+      "successTemplate": "${rawResult}"
+    }
+  },
+  "contract": {
+    "input": {
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "Backlot - List Devices input",
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Raw identifier: ANI/phone (E.164 or national), email, or account number. Normalized server-side, so an unencoded '+' is tolerated."
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "successSchema": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "title": "DeviceOut feed",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "device_id": {
+              "type": "string",
+              "description": "Opaque id of this device. Pass it to device-action as 'target'. Never read it aloud."
+            },
+            "label": {
+              "type": "string",
+              "description": "The device's name in the customer's home, e.g. \"Ella's iPad\". Match this against whatever the customer calls it."
+            },
+            "kind": {
+              "type": "string",
+              "description": "Category of device: phone, tablet, laptop, tv. Use it when the customer names a type rather than a device, e.g. \"the tablet\"."
+            },
+            "band": {
+              "type": "string",
+              "description": "Wi-Fi band it is on: 2.4 (slower, longer range) or 5 (faster)."
+            },
+            "rssi": {
+              "type": "integer",
+              "description": "Signal strength in dBm. Nearer 0 is better; below -70 is poor."
+            },
+            "ap_label": {
+              "type": "string",
+              "description": "Which hub or booster it is connected through, e.g. 'Upstairs Extender'. Useful for telling the customer where the problem is."
+            },
+            "steer_eligible": {
+              "type": "boolean",
+              "description": "True when this device can be moved to the faster band with a band-steer. If false, a band-steer will not help it."
+            },
+            "status_summary": {
+              "type": "string",
+              "description": "Short plain-English health phrase for this device, e.g. 'weak signal on the slower band'. Safe to say to the customer as-is."
+            }
+          },
+          "required": [
+            "ap_label",
+            "band",
+            "device_id",
+            "kind",
+            "label",
+            "rssi",
+            "status_summary",
+            "steer_eligible"
+          ],
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

@@ -134,7 +134,7 @@ def test_status_reports_the_staged_fault(
     assert body["gateway_model"] == "Northwind Hub 6"
     assert body["ap_total"] == 2
     assert body["ap_online"] == 1  # the extender is flapping
-    assert body["device_total"] == 3
+    assert body["device_total"] == 4
     assert_flat(body)
 
 

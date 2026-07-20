@@ -32,7 +32,7 @@ def test_seed_creates_the_expected_topology(db: Session) -> None:
     assert _count(db, Gateway) == 4
     assert _count(db, AccessPoint) == 8
     assert _count(db, Radio) == 13
-    assert _count(db, ConnectedDevice) == 9
+    assert _count(db, ConnectedDevice) == 10
 
 
 def test_the_seeded_baseline_is_healthy(db: Session) -> None:
@@ -152,7 +152,7 @@ def test_editing_the_network_pack_does_not_strand_rows(db: Session, tmp_path: Pa
 
     assert _count(db, Gateway) == 1
     assert _count(db, AccessPoint) == 2
-    assert _count(db, ConnectedDevice) == 3
+    assert _count(db, ConnectedDevice) == 4
 
 
 def test_dropping_the_network_section_removes_every_topology(

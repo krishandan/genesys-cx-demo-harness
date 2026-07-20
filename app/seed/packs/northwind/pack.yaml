@@ -30,7 +30,32 @@ tenant:
       # Least disruptive remedy first: a band steer is invisible to the customer,
       # rebooting an extender drops it. This order is what makes the demo run
       # band-steer before reboot-extender.
-      fault_precedence: [wan_degraded, device_band_stuck, extender_flapping]          # fixed run, so the real name length is not leaked
+      fault_precedence: [wan_degraded, device_band_stuck, extender_flapping]
+    # Shape of sent_to_masked in the order confirmation response.
+    masked_email:
+      reveal_chars: 1
+      mask_char: "•"
+      mask_length: 4
+    # ── Offer catalogue ───────────────────────────────────────────────────────
+    # Adding an offer is a pack edit. Eligibility is evaluated against the
+    # subscriber's real topology by the predicates in
+    # app/modules/offers/service.py — never against a subscriber id.
+    # Pack order is priority: the first eligible offer wins.
+    offers:
+      default_eta_text: arrives in 3–5 working days
+      catalogue:
+        - offer_id: NW-MESH-PRO
+          name: Northwind Mesh Pro
+          price_gbp: 6.0
+          reason: >-
+            it puts a second mesh point upstairs, where a device is currently hanging
+            on at the edge of the booster's range
+          eligibility:
+            # A device hanging off a booster at a weak signal is a coverage gap. This
+            # is deliberately durable: rebooting the booster does not move a device's
+            # signal, so the offer survives the self-heal rather than vanishing the
+            # moment the immediate fault clears.
+            device_on_extender_rssi_at_or_below: -58
 
 seed:
   faker_seed: 20260716        # fixed → deterministic re-seed
@@ -41,9 +66,11 @@ seed:
   identities: [phone, email, account_no]
   # One factor per party, stored only as a hash. A known value (rather than BE-0's
   # random Faker dob) so a demo and the gx verify happy path can actually assert it.
+  # Demo 1 authenticates with two collects: mobile number, then this PIN. Five digits
+  # (BE-5) — a PIN verifies, it cannot identify, so the number is collected first.
   verification:
     factor_type: pin
-    value_pattern: "1234"
+    value_pattern: "24680"
   contact_channels: [sms, email]
   # Ofcom reserves +447700900xxx for fiction: no seeded number can reach a real person.
   phone_pattern: "+447700900{index:03d}"
@@ -90,24 +117,40 @@ seed:
           - {ap: ext1, band: "2.4", channel: 6, utilization: 19}
           - {ap: ext1, band: "5", channel: 44, utilization: 18}
         devices:
+          # Family-named devices: the customer says "my daughter's iPad", and the agent
+          # matches that against these labels via /gx/devices.
           - key: phone
             label: "{first_name}'s Phone"
+            kind: phone
             ap: hub
             band: "5"
             rssi: -48
             steer_eligible: true
-          - key: tv
-            label: Living Room TV
-            ap: hub
+          - key: ipad
+            # The device wifi_degraded faults, so the customer's complaint and the
+            # diagnostic verdict name the same thing.
+            label: Ella's iPad
+            kind: tablet
+            ap: ext1
             band: "5"
-            rssi: -52
-            steer_eligible: false
+            rssi: -55
+            steer_eligible: true
           - key: laptop
+            # Sits at the edge of the booster's range even when healthy: this is the
+            # seeded coverage gap that makes the mesh offer genuinely applicable.
             label: Work Laptop
+            kind: laptop
             ap: ext1
             band: "5"
             rssi: -61
             steer_eligible: true
+          - key: tv
+            label: Living Room TV
+            kind: tv
+            ap: hub
+            band: "5"
+            rssi: -52
+            steer_eligible: false
       standard_home:
         gateway:
           key: gateway
@@ -134,12 +177,14 @@ seed:
         devices:
           - key: phone
             label: "{first_name}'s Phone"
+            kind: phone
             ap: hub
             band: "5"
             rssi: -48
             steer_eligible: true
           - key: laptop
             label: Work Laptop
+            kind: laptop
             ap: ext1
             band: "5"
             rssi: -55

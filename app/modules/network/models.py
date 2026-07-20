@@ -136,6 +136,9 @@ class ConnectedDevice(Base):
     )
     seed_key: Mapped[str] = mapped_column(String(32), nullable=False, default="", index=True)
     label: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Category (phone | tablet | laptop | tv | ...), so the agent can match a device the
+    # customer names by type as well as by label. Pack config, not derived from label.
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     mac: Mapped[str] = mapped_column(String(17), nullable=False)
     band: Mapped[str] = mapped_column(String(8), nullable=False)
     rssi: Mapped[int] = mapped_column(Integer, nullable=False)

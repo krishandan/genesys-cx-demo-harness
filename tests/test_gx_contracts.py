@@ -55,13 +55,15 @@ def test_contract_output_is_flat(slug: str) -> None:
 
 
 def test_only_the_declared_feed_endpoints_are_arrays() -> None:
+    """A top-level array is the one array shape AVA accepts, so it stays deliberate:
+    the telemetry feed, and the device list the agent matches a named device against."""
     array_slugs = {
         a.slug
         for a in ACTIONS
         if build_all()[a.slug]["contract"]["output"]["successSchema"]["type"] == "array"
     }
 
-    assert array_slugs == {"telemetry"}
+    assert array_slugs == {"telemetry", "devices"}
 
 
 @pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])

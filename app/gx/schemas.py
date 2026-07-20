@@ -267,6 +267,159 @@ class CsatOut(BaseModel):
     stored: bool = Field(default=False, description="True when the score was persisted.")
 
 
+class DeviceOut(BaseModel):
+    """One device in the customer's home. The feed is a top-level array of these.
+
+    This is the tool to call when the customer names a device ("my daughter's iPad",
+    "the telly") and you need to work out which one they mean before acting.
+    """
+
+    device_id: str = Field(
+        default="",
+        description=(
+            "Opaque id of this device. Pass it to device-action as 'target'. Never "
+            "read it aloud."
+        ),
+    )
+    label: str = Field(
+        default="",
+        description=(
+            "The device's name in the customer's home, e.g. \"Ella's iPad\". Match "
+            "this against whatever the customer calls it."
+        ),
+    )
+    kind: str = Field(
+        default="",
+        description=(
+            "Category of device: phone, tablet, laptop, tv. Use it when the customer "
+            "names a type rather than a device, e.g. \"the tablet\"."
+        ),
+    )
+    band: str = Field(
+        default="",
+        description="Wi-Fi band it is on: 2.4 (slower, longer range) or 5 (faster).",
+    )
+    rssi: int = Field(
+        default=0,
+        description="Signal strength in dBm. Nearer 0 is better; below -70 is poor.",
+    )
+    ap_label: str = Field(
+        default="",
+        description=(
+            "Which hub or booster it is connected through, e.g. 'Upstairs Extender'. "
+            "Useful for telling the customer where the problem is."
+        ),
+    )
+    steer_eligible: bool = Field(
+        default=False,
+        description=(
+            "True when this device can be moved to the faster band with a band-steer. "
+            "If false, a band-steer will not help it."
+        ),
+    )
+    status_summary: str = Field(
+        default="",
+        description=(
+            "Short plain-English health phrase for this device, e.g. 'weak signal on "
+            "the slower band'. Safe to say to the customer as-is."
+        ),
+    )
+
+
+class OffersOut(BaseModel):
+    """The single best upgrade this customer's network justifies, if any."""
+
+    found: bool = Field(
+        description="False when the identifier resolves to no subscriber with a network."
+    )
+    eligible: bool = Field(
+        default=False,
+        description=(
+            "True when there is an offer worth making. When false there is no suitable "
+            "upgrade — do not invent one, and do not pressure the customer."
+        ),
+    )
+    offer_id: str = Field(
+        default="",
+        description="Id of the offer. Pass it to order-action 'place' as target.",
+    )
+    name: str = Field(
+        default="", description="The offer's name, e.g. 'Northwind Mesh Pro'."
+    )
+    price_gbp: float = Field(
+        default=0.0, description="Monthly price in pounds. Always state this before ordering."
+    )
+    reason: str = Field(
+        default="",
+        description=(
+            "Why this customer specifically would benefit, in plain English. Use this "
+            "to explain the recommendation rather than making up a reason."
+        ),
+    )
+
+
+class OrderActionIn(BaseModel):
+    identifier: str
+    action: str = Field(description="place | send-confirmation")
+    target: str = Field(
+        description=(
+            "For place: the offer_id from get-offers. "
+            "For send-confirmation: the order_id returned by place."
+        )
+    )
+    params: str = Field(
+        default="",
+        description=(
+            "Optional JSON object as a string. A string rather than an object because "
+            "a data action contract cannot express a nested one."
+        ),
+    )
+
+
+class OrderActionOut(BaseModel):
+    """One shape for both verbs, so a flow binds the same fields either way. The verb
+    that does not produce a field leaves it empty."""
+
+    ok: bool = Field(
+        description="True when the action succeeded. False means nothing was ordered or sent."
+    )
+    action: str = Field(default="", description="The verb that was run.")
+    order_id: str = Field(
+        default="",
+        description=(
+            "The order's id. After 'place', pass this to 'send-confirmation' as target."
+        ),
+    )
+    status: str = Field(
+        default="",
+        description="Order state: placed, confirmed or cancelled.",
+    )
+    eta_text: str = Field(
+        default="",
+        description=(
+            "When the customer can expect it, in plain English. Safe to say as-is."
+        ),
+    )
+    sent_to_masked: str = Field(
+        default="",
+        description=(
+            "Masked address the confirmation went to, e.g. 'a••••@example.net'. Use it "
+            "to confirm where it went without reciting the full address."
+        ),
+    )
+    message_ref: str = Field(
+        default="",
+        description="Reference for the confirmation message, if the customer asks.",
+    )
+    result_summary: str = Field(
+        default="",
+        description=(
+            "Plain-English description of what happened, safe to paraphrase. On "
+            "failure, why it did not run."
+        ),
+    )
+
+
 class TelemetryOut(BaseModel):
     """One telemetry event, flat. The feed is a top-level array of these — allowed by
     the gx rule (an array nested in a property is not; a top-level array is)."""

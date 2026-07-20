@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from tests.test_gx_customer_context import assert_flat
 
 SEEDED_PHONE = "+447700900000"
-SEEDED_PIN = "1234"  # northwind pack: seed.verification.value_pattern
+SEEDED_PIN = "24680"  # northwind pack: seed.verification.value_pattern (5 digits, BE-5)
 
 
 def _verify(client: TestClient, auth: dict[str, str], **payload: str) -> dict:
@@ -72,7 +72,9 @@ def test_wrong_factor_is_false_without_detail(
 def test_wrong_factor_type_is_false(
     client: TestClient, auth: dict[str, str], seeded_northwind: None
 ) -> None:
-    body = _verify(client, auth, identifier=SEEDED_PHONE, factor_type="dob", factor_value="1234")
+    body = _verify(
+        client, auth, identifier=SEEDED_PHONE, factor_type="dob", factor_value=SEEDED_PIN
+    )
 
     assert body["verified"] is False
 

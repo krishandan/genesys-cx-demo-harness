@@ -24,18 +24,26 @@ from app.gx.schemas import (
     CustomerContextOut,
     DeviceActionIn,
     DeviceActionOut,
+    DeviceOut,
     InteractionEventIn,
     InteractionEventOut,
     NetDiagnosticsOut,
     NetStatusOut,
+    OffersOut,
+    OrderActionIn,
+    OrderActionOut,
     TelemetryOut,
     VerifyCustomerIn,
     VerifyCustomerOut,
 )
 from app.modules.network.actions import ACTION_HANDLERS, unknown_action
 from app.modules.network.config import network_config
+from app.modules.network.devices import describe_devices
 from app.modules.network.faults import NO_FAULT, build_verdict, detect_all
 from app.modules.network.service import Topology, load_topology
+from app.modules.offers.service import best_offer
+from app.modules.orders.actions import ACTION_HANDLERS as ORDER_ACTION_HANDLERS
+from app.modules.orders.actions import unknown_action as unknown_order_action
 from app.modules.profile.service import ProfileRollup, check_factor, resolve_profile
 
 CSAT_MIN, CSAT_MAX = 1, 5
@@ -391,3 +399,139 @@ def telemetry(
         )
         for e in events
     ]
+
+
+# ── Devices, offers and orders ───────────────────────────────────────────────────────
+
+
+@router.get("/devices", response_model=list[DeviceOut])
+def devices(
+    tenant: CurrentTenant,
+    db: DbDep,
+    identifier: Annotated[str, Query(description="ANI, email, or account number.")],
+) -> list[DeviceOut]:
+    """Every device in the subscriber's home, weakest signal first.
+
+    A top-level array of flat objects — the one array shape a data action contract can
+    express. Unknown subscriber returns an empty array rather than an error, so the
+    agent can treat "nobody there" and "no devices" the same way.
+    """
+    rollup = _resolve(db, tenant, identifier)
+    if rollup is None:
+        return []
+
+    topology = load_topology(db, tenant, rollup.party.party_id)
+    if topology.is_empty:
+        return []
+
+    views = describe_devices(topology, network_config(tenant))
+    return [
+        DeviceOut(
+            device_id=v.device_id,
+            label=v.label,
+            kind=v.kind,
+            band=v.band,
+            rssi=v.rssi,
+            ap_label=v.ap_label,
+            steer_eligible=v.steer_eligible,
+            status_summary=v.status_summary,
+        )
+        for v in views
+    ]
+
+
+@router.get("/offers", response_model=OffersOut)
+def offers(
+    tenant: CurrentTenant,
+    db: DbDep,
+    identifier: Annotated[str, Query(description="ANI, email, or account number.")],
+) -> OffersOut:
+    """The single best upgrade this subscriber's network justifies, if any.
+
+    Eligibility is derived from their actual topology, so the reason given to the
+    customer is true of them specifically. Not eligible returns the same key set with
+    `eligible: false`, so one contract covers both branches.
+    """
+    rollup = _resolve(db, tenant, identifier)
+    if rollup is None:
+        return OffersOut(found=False)
+
+    topology = load_topology(db, tenant, rollup.party.party_id)
+    if topology.is_empty:
+        return OffersOut(found=False)
+
+    offer = best_offer(tenant, topology)
+    if offer is None:
+        return OffersOut(found=True, eligible=False)
+
+    return OffersOut(
+        found=True,
+        eligible=True,
+        offer_id=offer.offer_id,
+        name=offer.name,
+        price_gbp=offer.price_gbp,
+        reason=offer.reason,
+    )
+
+
+def _order_error(payload: OrderActionOut, status_code: int) -> JSONResponse:
+    """A flat 4xx. HTTPException would nest the body under 'detail'."""
+    return JSONResponse(status_code=status_code, content=payload.model_dump())
+
+
+@router.post("/order-action", response_model=OrderActionOut)
+def order_action(
+    tenant: CurrentTenant,
+    db: DbDep,
+    payload: OrderActionIn,
+) -> Any:
+    """Place an order, or send its confirmation.
+
+    Both verbs are idempotent: placing the same offer twice returns the original order,
+    and re-sending a confirmation reports the original reference. A retrying agent
+    cannot double-order.
+    """
+    base = OrderActionOut(ok=False, action=payload.action)
+
+    rollup = _resolve(db, tenant, payload.identifier)
+    if rollup is None:
+        return _order_error(
+            base.model_copy(update={"result_summary": "No subscriber for that identifier"}),
+            404,
+        )
+
+    handler = ORDER_ACTION_HANDLERS.get(payload.action)
+    if handler is None:
+        outcome = unknown_order_action(payload.action)
+        return _order_error(
+            base.model_copy(update={"result_summary": outcome.result_summary}),
+            outcome.status_code,
+        )
+
+    params = _parse_params(payload.params)
+    if params is None:
+        return _order_error(
+            base.model_copy(update={"result_summary": "params must be a JSON object string"}),
+            400,
+        )
+
+    outcome = handler(db, tenant, rollup.party, payload.target, params)
+    if not outcome.ok:
+        db.rollback()
+        return _order_error(
+            base.model_copy(update={"result_summary": outcome.result_summary}),
+            outcome.status_code,
+        )
+
+    db.commit()
+
+    return OrderActionOut(
+        ok=True,
+        action=payload.action,
+        order_id=outcome.order_id,
+        status=outcome.status,
+        eta_text=outcome.eta_text,
+        sent_to_masked=outcome.sent_to_masked,
+        message_ref=outcome.message_ref,
+        result_summary=outcome.result_summary,
+    )

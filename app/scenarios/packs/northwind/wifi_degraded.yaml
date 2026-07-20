@@ -6,9 +6,10 @@
 name: wifi_degraded
 title: WiFi degraded (the M1 demo)
 description: >-
-  Anne's phone is pinned to 2.4GHz at a poor signal while the hub's 5GHz radio sits
-  quiet, and the upstairs extender is flapping. The WAN is healthy: the fault is
-  inside the home, which is the whole point of the demo.
+  Ella's iPad is pinned to 2.4GHz at a poor signal on the upstairs extender, and that
+  extender is flapping. The WAN is healthy: the fault is inside the home, which is the
+  whole point of the demo. The customer complains about the iPad by name, and the
+  diagnostic verdict names the same device back.
 
 # Restore the baseline before staging, so apply is idempotent and does not depend
 # on what a previous take left behind.
@@ -18,16 +19,16 @@ subscribers:
   identifiers: ["+447700900000"]
 
 steps:
-  - description: Pin the phone to 2.4GHz with a poor signal
+  - description: Pin Ella's iPad to 2.4GHz with a poor signal
     entity: connected_device
-    match: {seed_key: phone}
+    match: {seed_key: ipad}
     set:
       band: "2.4"
       rssi: -78
 
   - description: Busy the 2.4GHz radio, so the story reads as congestion
     entity: radio
-    match: {seed_key: hub-2.4}
+    match: {seed_key: ext1-2.4}
     set:
       utilization: 71
 

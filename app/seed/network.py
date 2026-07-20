@@ -179,6 +179,7 @@ def seed_networks(
                         connected_ap_id=ap_ids[device_cfg["ap"]],
                         seed_key=device_cfg["key"],
                         label=device_cfg["label"].format(first_name=party.first_name),
+                        kind=str(device_cfg.get("kind", "")),
                         mac=_mac_for(slug, index, device_cfg["key"]),
                         band=str(device_cfg["band"]),
                         rssi=int(device_cfg["rssi"]),

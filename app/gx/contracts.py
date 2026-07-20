@@ -29,10 +29,14 @@ from app.gx.schemas import (
     CustomerContextOut,
     DeviceActionIn,
     DeviceActionOut,
+    DeviceOut,
     InteractionEventIn,
     InteractionEventOut,
     NetDiagnosticsOut,
     NetStatusOut,
+    OffersOut,
+    OrderActionIn,
+    OrderActionOut,
     TelemetryOut,
     VerifyCustomerIn,
     VerifyCustomerOut,
@@ -338,6 +342,57 @@ ACTIONS: list[GxAction] = [
         output_is_array=True,
         query_params=["identifier"],
         inputs=[IDENTIFIER_INPUT],
+    ),
+    GxAction(
+        slug="devices",
+        name="Backlot - List Devices",
+        method="GET",
+        path="/gx/devices",
+        output_model=DeviceOut,
+        output_is_array=True,
+        query_params=["identifier"],
+        inputs=[IDENTIFIER_INPUT],
+    ),
+    GxAction(
+        slug="offers",
+        name="Backlot - Get Best Offer",
+        method="GET",
+        path="/gx/offers",
+        output_model=OffersOut,
+        query_params=["identifier"],
+        inputs=[IDENTIFIER_INPUT],
+    ),
+    GxAction(
+        slug="order-action",
+        name="Backlot - Order Action",
+        method="POST",
+        path="/gx/order-action",
+        output_model=OrderActionOut,
+        body_fields=list(OrderActionIn.model_fields),
+        inputs=[
+            IDENTIFIER_INPUT,
+            InputField(
+                name="action",
+                type="string",
+                description=(
+                    "place (order an offer) | send-confirmation (email the confirmation)"
+                ),
+            ),
+            InputField(
+                name="target",
+                type="string",
+                description=(
+                    "For place: the offer_id from get-offers. For send-confirmation: "
+                    "the order_id returned by place."
+                ),
+            ),
+            InputField(
+                name="params",
+                type="string",
+                description="Optional JSON object as a string. Leave empty.",
+                required=False,
+            ),
+        ],
     ),
 ]
 

@@ -21,6 +21,7 @@ from app.db import Base
 KIND_INTERACTION = "interaction"
 KIND_CSAT = "csat"
 KIND_NETWORK_DEGRADED = "network.degraded"
+KIND_ORDER_CONFIRMATION_SENT = "order.confirmation_sent"
 
 # Kinds the telemetry seam exposes. A proactive workflow (GX-C, post-M1) polls these.
 TELEMETRY_KINDS = (KIND_NETWORK_DEGRADED,)

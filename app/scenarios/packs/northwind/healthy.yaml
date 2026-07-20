@@ -19,18 +19,18 @@ steps:
     set:
       wan_status: online
 
-  - description: Phone on 5GHz with a strong signal
+  - description: Ella's iPad back on 5GHz with a strong signal
     entity: connected_device
-    match: {seed_key: phone}
+    match: {seed_key: ipad}
     set:
       band: "5"
-      rssi: -48
+      rssi: -55
 
-  - description: Quiet the 2.4GHz radio
+  - description: Quiet the upstairs 2.4GHz radio
     entity: radio
-    match: {seed_key: hub-2.4}
+    match: {seed_key: ext1-2.4}
     set:
-      utilization: 24
+      utilization: 19
 
   - description: Extender online on a good backhaul
     entity: access_point
