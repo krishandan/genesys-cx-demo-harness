@@ -11,7 +11,7 @@
         "X-API-Key": "${credentials.apiKey}",
         "Content-Type": "application/json"
       },
-      "requestTemplate": "{\"identifier\": \"${esc.jsonString(input.identifier)}\",\"action\": \"${esc.jsonString(input.action)}\",\"target\": \"${esc.jsonString(input.target)}\",\"params\": \"${esc.jsonString(input.params)}\"}"
+      "requestTemplate": "{\"identifier\": \"$esc.jsonString(\"${input.identifier}\")\",\"action\": \"$esc.jsonString(\"${input.action}\")\",\"target\": \"$esc.jsonString(\"${input.target}\")\",\"params\": \"$esc.jsonString(\"${input.params}\")\"}"
     },
     "response": {
       "translationMap": {},

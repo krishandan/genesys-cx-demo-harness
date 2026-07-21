@@ -11,7 +11,7 @@
         "X-API-Key": "${credentials.apiKey}",
         "Content-Type": "application/json"
       },
-      "requestTemplate": "{\"identifier\": \"${esc.jsonString(input.identifier)}\",\"channel\": \"${esc.jsonString(input.channel)}\",\"kind\": \"${esc.jsonString(input.kind)}\"}"
+      "requestTemplate": "{\"identifier\": \"$esc.jsonString(\"${input.identifier}\")\",\"channel\": \"$esc.jsonString(\"${input.channel}\")\",\"kind\": \"$esc.jsonString(\"${input.kind}\")\"}"
     },
     "response": {
       "translationMap": {},

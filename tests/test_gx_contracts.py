@@ -103,12 +103,14 @@ def test_no_tenant_input_or_header(slug: str) -> None:
 
 @pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
 def test_query_params_are_url_escaped(slug: str) -> None:
-    """Without esc.url a '+' in an E.164 number decodes to a space server-side."""
+    """The documented Velocity form: $esc.url("${input.X}"). A bare $ prefix and a
+    quoted full reference; the ${esc.url(input.X)} form is a Velocity parse error at
+    import. Escaping also stops a '+' in an E.164 number decoding to a space."""
     action = next(a for a in ACTIONS if a.slug == slug)
     url = build_all()[slug]["config"]["request"]["requestUrlTemplate"]
 
     for param in action.query_params:
-        assert f"{param}=${{esc.url(input.{param})}}" in url
+        assert f'{param}=$esc.url("${{input.{param}}}")' in url
 
 
 @pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
@@ -125,8 +127,10 @@ def test_every_action_has_a_request_template(slug: str) -> None:
 
 @pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
 def test_post_bodies_escape_string_fields(slug: str) -> None:
-    """esc.jsonString stops a quote in user input breaking out of the JSON body;
-    numeric and boolean fields stay unquoted so the body carries the right type."""
+    """The documented form $esc.jsonString("${input.X}") stops a quote in user input
+    breaking out of the JSON body. String values carry surrounding JSON quotes; numeric
+    and boolean values do not, so the body keeps the right type (a CSAT score is an int).
+    """
     action = next(a for a in ACTIONS if a.slug == slug)
     definition = build_all()[slug]
     request = definition["config"]["request"]
@@ -137,10 +141,11 @@ def test_post_bodies_escape_string_fields(slug: str) -> None:
     template = request["requestTemplate"]
     types = {i.name: i.type for i in action.inputs}
     for field_name in action.body_fields:
+        escaped = f'$esc.jsonString("${{input.{field_name}}}")'
         if types.get(field_name) in {"integer", "number", "boolean"}:
-            assert f'"{field_name}": ${{input.{field_name}}}' in template
+            assert f'"{field_name}": {escaped}' in template
         else:
-            assert f'"{field_name}": "${{esc.jsonString(input.{field_name})}}"' in template
+            assert f'"{field_name}": "{escaped}"' in template
 
 
 def test_base_url_is_config_not_a_literal() -> None:
@@ -192,6 +197,66 @@ def test_generation_refuses_a_missing_request_template() -> None:
 
     with pytest.raises(MissingRequiredContractField, match="requestTemplate"):
         _assert_genesys_required_fields(definition, "customer-context")
+
+
+@pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
+def test_every_input_reference_is_escaped(slug: str) -> None:
+    """Generation must not leave a raw ${input.X} in the URL or body — Genesys treats
+    escaping as injection protection. The generator runs this, so a pass here means it
+    held for every real contract."""
+    from app.gx.contracts import _assert_inputs_are_escaped
+
+    _assert_inputs_are_escaped(build_all()[slug], slug)
+
+
+def test_generation_refuses_an_unescaped_url_input() -> None:
+    """The BE-5 §1 bug, pinned: ${esc.url(input.X)} is not an escaping macro (the ref
+    inside is not wrapped as $esc.url("${input.X}")), so it must fail generation."""
+    from app.gx.contracts import UnescapedTemplateInput, _assert_inputs_are_escaped
+
+    bad = {
+        "config": {
+            "request": {
+                "requestUrlTemplate": "https://x/y?identifier=${esc.url(input.identifier)}",
+                "requestTemplate": "${input.rawRequest}",
+            }
+        }
+    }
+
+    with pytest.raises(UnescapedTemplateInput, match="identifier"):
+        _assert_inputs_are_escaped(bad, "bad")
+
+
+def test_generation_refuses_an_unescaped_body_input() -> None:
+    from app.gx.contracts import UnescapedTemplateInput, _assert_inputs_are_escaped
+
+    bad = {
+        "config": {
+            "request": {
+                "requestUrlTemplate": "https://x/y",
+                "requestTemplate": '{"comment": "${input.comment}"}',
+            }
+        }
+    }
+
+    with pytest.raises(UnescapedTemplateInput, match="comment"):
+        _assert_inputs_are_escaped(bad, "bad")
+
+
+def test_rawrequest_builtin_is_not_flagged_as_unescaped() -> None:
+    """A GET's ${input.rawRequest} is a Genesys built-in, not user data to escape."""
+    from app.gx.contracts import _assert_inputs_are_escaped
+
+    ok = {
+        "config": {
+            "request": {
+                "requestUrlTemplate": 'https://x/y?a=$esc.url("${input.a}")',
+                "requestTemplate": "${input.rawRequest}",
+            }
+        }
+    }
+
+    _assert_inputs_are_escaped(ok, "ok")  # must not raise
 
 
 def test_contracts_are_valid_json_on_disk() -> None:

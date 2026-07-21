@@ -15,6 +15,7 @@ as ${credentials.apiKey} so the key never has to travel through a flow.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -140,9 +141,13 @@ def _input_schema(action: GxAction) -> dict[str, Any]:
 def _request_config(action: GxAction, base_url: str) -> dict[str, Any]:
     url = f"{base_url}{action.path}"
     if action.query_params:
-        # esc.url percent-encodes the value. Without it a '+' in an E.164 number
-        # decodes to a space server-side and the lookup silently resolves nothing.
-        query = "&".join(f"{p}=${{esc.url(input.{p})}}" for p in action.query_params)
+        # Velocity escaping, the form Genesys actually documents:
+        #   $esc.url("${input.identifier}")
+        # The macro takes a bare $ prefix (NOT ${...} formal notation) and its argument
+        # is a full reference in quotes (NOT a bare input.identifier). The ${esc.url(...)}
+        # form BE-5 §1 used is a Velocity parse error at import. $esc.url percent-encodes,
+        # so a '+' in an E.164 number survives rather than decoding to a space.
+        query = "&".join(f'{p}=$esc.url("${{input.{p}}}")' for p in action.query_params)
         url = f"{url}?{query}"
 
     # No X-Tenant header: it was bound to an optional input, and an unsupplied optional
@@ -167,13 +172,18 @@ def _request_config(action: GxAction, base_url: str) -> dict[str, Any]:
         types = {i.name: i.type for i in action.inputs}
         parts = []
         for f in action.body_fields:
-            # Quote strings and run them through esc.jsonString so a quote or backslash
-            # in user input cannot break out of the JSON body. Leave integer/number/
-            # boolean bare so the body carries the right type (a CSAT score is an int).
-            if types.get(f) in {"integer", "number", "boolean"}:
-                value = f"${{input.{f}}}"
-            else:
-                value = f'"${{esc.jsonString(input.{f})}}"'
+            # Same documented escaping form as the URL: $esc.jsonString("${input.f}"),
+            # bare $ prefix and a quoted full reference. esc.jsonString escapes the string
+            # CONTENT only (it does not add the surrounding JSON quotes), so a quote or
+            # backslash in user input cannot break out of the body. Genesys frames this as
+            # injection protection, not optional.
+            escaped = f'$esc.jsonString("${{input.{f}}}")'
+            # A string value carries surrounding JSON quotes (jsonString escapes the
+            # content, it does not add them). A number/boolean gets NO surrounding quotes,
+            # so a clean value renders bare and keeps its JSON type (a CSAT score is an
+            # int); a value with special characters is escaped and fails safe.
+            is_scalar_nonstring = types.get(f) in {"integer", "number", "boolean"}
+            value = escaped if is_scalar_nonstring else f'"{escaped}"'
             parts.append(f'"{f}": {value}')
         request["requestTemplate"] = "{" + ",".join(parts) + "}"
 
@@ -197,6 +207,46 @@ def _assert_genesys_required_fields(definition: dict[str, Any], where: str) -> N
                 f"{where}: config.request is missing '{field_name}'. Genesys validates "
                 f"it as required for every request type (GET included) and rejects the "
                 f"import without it."
+            )
+
+
+class UnescapedTemplateInput(ValueError):
+    """A template interpolates a user input without a Velocity escaping macro.
+
+    Genesys frames escaping as injection protection and warns that an unescaped variable
+    carrying special characters fails at execution. This is the third validation rule we
+    learned by hitting it at import (after actionType and requestTemplate), so it, too,
+    breaks the build rather than the import.
+    """
+
+
+# An input reference wrapped in an escaping macro, the documented form:
+#   $esc.url("${input.identifier}")  /  $esc.jsonString("${input.comment}")
+_ESCAPED_INPUT_REF = re.compile(r'\$esc\.[A-Za-z]+\("\$\{input\.[A-Za-z0-9_]+\}"\)')
+# Any mention of an input field, in ANY notation. Deliberately not anchored to the
+# canonical ${input.X}, so the malformed BE-5 §1 form ${esc.url(input.X)} — where the
+# field rides bare inside a broken macro — is caught too, not just a raw reference.
+_INPUT_MENTION = re.compile(r"input\.([A-Za-z0-9_]+)")
+# Genesys built-ins that are not user data and are used raw by design.
+_TEMPLATE_BUILTINS = {"rawRequest"}
+
+
+def _assert_inputs_are_escaped(definition: dict[str, Any], where: str) -> None:
+    request = definition.get("config", {}).get("request", {})
+    for field_name in ("requestUrlTemplate", "requestTemplate"):
+        template = str(request.get(field_name, ""))
+        # Remove every properly-escaped reference; any input field still mentioned in the
+        # remainder is either a raw interpolation or a malformed macro — both unsafe.
+        remainder = _ESCAPED_INPUT_REF.sub("", template)
+        leftover = [
+            name for name in _INPUT_MENTION.findall(remainder) if name not in _TEMPLATE_BUILTINS
+        ]
+        if leftover:
+            raise UnescapedTemplateInput(
+                f"{where}: {field_name} references {leftover} without a valid escaping "
+                f'macro. Wrap each: $esc.url("${{input.X}}") for URL params, '
+                f'$esc.jsonString("${{input.X}}") for JSON body values. Genesys treats this '
+                f"as injection protection."
             )
 
 
@@ -225,6 +275,7 @@ def build_action(action: GxAction, base_url: str) -> dict[str, Any]:
 
     # Fail generation rather than shipping a contract Genesys would reject at import.
     _assert_genesys_required_fields(definition, action.slug)
+    _assert_inputs_are_escaped(definition, action.slug)
     # Fail generation rather than shipping a contract AVA would silently reject.
     validate_contract(definition, action.slug)
     return definition

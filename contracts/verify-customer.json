@@ -11,7 +11,7 @@
         "X-API-Key": "${credentials.apiKey}",
         "Content-Type": "application/json"
       },
-      "requestTemplate": "{\"identifier\": \"${esc.jsonString(input.identifier)}\",\"factor_type\": \"${esc.jsonString(input.factor_type)}\",\"factor_value\": \"${esc.jsonString(input.factor_value)}\"}"
+      "requestTemplate": "{\"identifier\": \"$esc.jsonString(\"${input.identifier}\")\",\"factor_type\": \"$esc.jsonString(\"${input.factor_type}\")\",\"factor_value\": \"$esc.jsonString(\"${input.factor_value}\")\"}"
     },
     "response": {
       "translationMap": {},

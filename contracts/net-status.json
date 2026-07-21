@@ -5,7 +5,7 @@
   "secure": false,
   "config": {
     "request": {
-      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/net-status?identifier=${esc.url(input.identifier)}",
+      "requestUrlTemplate": "https://backlot-api.krishharness.com/gx/net-status?identifier=$esc.url(\"${input.identifier}\")",
       "requestType": "GET",
       "headers": {
         "X-API-Key": "${credentials.apiKey}"
