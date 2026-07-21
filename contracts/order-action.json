@@ -40,12 +40,13 @@
           },
           "params": {
             "type": "string",
-            "description": "Optional JSON object as a string. Leave empty."
+            "description": "JSON object as a string. Pass an empty string; unused here."
           }
         },
         "required": [
           "action",
           "identifier",
+          "params",
           "target"
         ],
         "additionalProperties": false

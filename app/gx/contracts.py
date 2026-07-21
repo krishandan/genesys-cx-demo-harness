@@ -127,7 +127,14 @@ def _input_schema(action: GxAction) -> dict[str, Any]:
     properties = {
         f.name: {"type": f.type, "description": f.description} for f in action.inputs
     }
-    required = sorted(f.name for f in action.inputs if f.required)
+    # Any input referenced in the URL or body MUST be required: Velocity renders an
+    # unsupplied optional as the literal ${input.X}, producing malformed JSON / a broken
+    # URL. "Optional but referenced" is not a valid state, so referencing forces required
+    # here regardless of the field's own flag. Callers pass "" for values they lack.
+    referenced = set(action.query_params) | set(action.body_fields)
+    required = sorted(
+        f.name for f in action.inputs if f.required or f.name in referenced
+    )
     return {
         "$schema": "http://json-schema.org/draft-04/schema#",
         "title": f"{action.name} input",
@@ -250,6 +257,39 @@ def _assert_inputs_are_escaped(definition: dict[str, Any], where: str) -> None:
             )
 
 
+class OptionalReferencedInput(ValueError):
+    """A template references an input that the schema marks optional.
+
+    Velocity has no graceful handling for an absent reference: an unsupplied optional
+    renders as the literal ${input.X}, breaking the URL or the JSON body. So an input a
+    template references MUST be required — callers pass "" for values they lack. This is
+    the fourth Genesys rule learned at import (after actionType, requestTemplate, and the
+    escaping syntax); like the others it breaks the build, not the import.
+    """
+
+
+def _referenced_input_names(request: dict[str, Any]) -> set[str]:
+    names: set[str] = set()
+    for field_name in ("requestUrlTemplate", "requestTemplate"):
+        template = str(request.get(field_name, ""))
+        names.update(_INPUT_MENTION.findall(template))
+    return names - _TEMPLATE_BUILTINS
+
+
+def _assert_referenced_inputs_are_required(definition: dict[str, Any], where: str) -> None:
+    request = definition.get("config", {}).get("request", {})
+    referenced = _referenced_input_names(request)
+    required = set(definition["contract"]["input"]["inputSchema"].get("required", []))
+    optional = sorted(referenced - required)
+    if optional:
+        raise OptionalReferencedInput(
+            f"{where}: {optional} is referenced in a template but not marked required. "
+            f"Velocity renders an unsupplied optional as the literal ${{input.X}} and "
+            f'breaks the request. Mark it required; the caller passes "" when it has no '
+            f"value."
+        )
+
+
 def build_action(action: GxAction, base_url: str) -> dict[str, Any]:
     definition = {
         "name": action.name,
@@ -276,6 +316,7 @@ def build_action(action: GxAction, base_url: str) -> dict[str, Any]:
     # Fail generation rather than shipping a contract Genesys would reject at import.
     _assert_genesys_required_fields(definition, action.slug)
     _assert_inputs_are_escaped(definition, action.slug)
+    _assert_referenced_inputs_are_required(definition, action.slug)
     # Fail generation rather than shipping a contract AVA would silently reject.
     validate_contract(definition, action.slug)
     return definition
@@ -366,10 +407,9 @@ ACTIONS: list[GxAction] = [
                 name="params",
                 type="string",
                 description=(
-                    "Optional JSON object as a string, e.g. '{\"band\":\"5\"}'. Leave "
-                    "empty for the default behaviour."
+                    "JSON object as a string, e.g. '{\"band\":\"5\"}'. Pass an empty "
+                    "string for the default behaviour."
                 ),
-                required=False,
             ),
         ],
     ),
@@ -388,7 +428,9 @@ ACTIONS: list[GxAction] = [
                 description="webmessaging | voice | sms | email | ...",
             ),
             InputField(
-                name="kind", type="string", description="inbound | outbound", required=False
+                name="kind",
+                type="string",
+                description="inbound | outbound. Pass an empty string to default to inbound.",
             ),
         ],
     ),
@@ -402,12 +444,18 @@ ACTIONS: list[GxAction] = [
         inputs=[
             IDENTIFIER_INPUT,
             InputField(name="score", type="integer", description="1–5."),
-            InputField(name="comment", type="string", description="Free text.", required=False),
+            InputField(
+                name="comment",
+                type="string",
+                description="Free text. Pass an empty string if the customer left none.",
+            ),
             InputField(
                 name="conversation_ref",
                 type="string",
-                description="Genesys conversation id, for correlation.",
-                required=False,
+                description=(
+                    "Genesys conversation id, for correlation. Pass an empty string if "
+                    "you do not have it."
+                ),
             ),
         ],
     ),
@@ -467,8 +515,7 @@ ACTIONS: list[GxAction] = [
             InputField(
                 name="params",
                 type="string",
-                description="Optional JSON object as a string. Leave empty.",
-                required=False,
+                description="JSON object as a string. Pass an empty string; unused here.",
             ),
         ],
     ),

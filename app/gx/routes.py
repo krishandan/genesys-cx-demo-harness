@@ -322,13 +322,18 @@ def interaction_event(
     if not payload.channel.strip():
         return JSONResponse(status_code=400, content=base.model_dump())
 
+    # `kind` is a required contract input (an optional-but-referenced Velocity variable
+    # renders as a literal when omitted), so a caller with nothing to say sends "". Keep
+    # the inbound default rather than storing an empty kind.
+    kind = payload.kind.strip() or "inbound"
+
     record_event(
         db,
         tenant,
         rollup.party.party_id,
         KIND_INTERACTION,
         channel=payload.channel,
-        payload={"kind": payload.kind},
+        payload={"kind": kind},
     )
     return InteractionEventOut(
         ok=True,

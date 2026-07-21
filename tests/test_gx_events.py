@@ -73,6 +73,27 @@ def test_last_channel_follows_the_most_recent_interaction(
     assert ctx(client, auth)["last_channel"] == "webmessaging"
 
 
+def test_empty_kind_defaults_to_inbound(
+    client: TestClient, auth: dict[str, str], seeded_northwind: None, db: Any
+) -> None:
+    """`kind` is now a required contract input (an optional-but-referenced Velocity
+    variable renders as a literal when omitted), so Genesys sends "" when it has nothing.
+    The handler must keep the inbound default rather than storing an empty kind."""
+    from sqlalchemy import select
+
+    from app.events.models import KIND_INTERACTION, Event
+
+    r = interaction(client, auth, identifier=DEMO, channel="sms", kind="")
+    assert r.status_code == 200
+    assert r.json()["stored"] is True
+
+    event = db.execute(
+        select(Event).where(Event.kind == KIND_INTERACTION).order_by(Event.occurred_at.desc())
+    ).scalars().first()
+    assert event is not None
+    assert event.payload["kind"] == "inbound"
+
+
 def test_interaction_unknown_subscriber_is_a_flat_404(
     client: TestClient, auth: dict[str, str], seeded_northwind: None
 ) -> None:

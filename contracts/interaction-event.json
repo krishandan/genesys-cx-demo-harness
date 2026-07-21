@@ -36,12 +36,13 @@
           },
           "kind": {
             "type": "string",
-            "description": "inbound | outbound"
+            "description": "inbound | outbound. Pass an empty string to default to inbound."
           }
         },
         "required": [
           "channel",
-          "identifier"
+          "identifier",
+          "kind"
         ],
         "additionalProperties": false
       }

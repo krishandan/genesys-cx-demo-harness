@@ -36,14 +36,16 @@
           },
           "comment": {
             "type": "string",
-            "description": "Free text."
+            "description": "Free text. Pass an empty string if the customer left none."
           },
           "conversation_ref": {
             "type": "string",
-            "description": "Genesys conversation id, for correlation."
+            "description": "Genesys conversation id, for correlation. Pass an empty string if you do not have it."
           }
         },
         "required": [
+          "comment",
+          "conversation_ref",
           "identifier",
           "score"
         ],

@@ -259,6 +259,58 @@ def test_rawrequest_builtin_is_not_flagged_as_unescaped() -> None:
     _assert_inputs_are_escaped(ok, "ok")  # must not raise
 
 
+@pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
+def test_every_referenced_input_is_required(slug: str) -> None:
+    """An input a template references must be required: Velocity renders an unsupplied
+    optional as the literal ${input.X} and breaks the request. The generator runs this,
+    so a pass here means it held for every real contract."""
+    from app.gx.contracts import _assert_referenced_inputs_are_required
+
+    _assert_referenced_inputs_are_required(build_all()[slug], slug)
+
+
+@pytest.mark.parametrize(
+    ("slug", "field_name"),
+    [
+        ("csat", "comment"),
+        ("csat", "conversation_ref"),
+        ("device-action", "params"),
+        ("order-action", "params"),
+        ("interaction-event", "kind"),
+    ],
+)
+def test_previously_optional_referenced_inputs_are_now_required(
+    slug: str, field_name: str
+) -> None:
+    """These were optional-but-referenced — the exact bug (csat comment / conversation_ref
+    errored on import when omitted). They must now be required."""
+    required = build_all()[slug]["contract"]["input"]["inputSchema"]["required"]
+
+    assert field_name in required
+
+
+def test_generation_refuses_an_optional_referenced_input() -> None:
+    """The rule, pinned: a template reference to a field the schema marks optional must
+    fail generation, not surface at import."""
+    from app.gx.contracts import (
+        OptionalReferencedInput,
+        _assert_referenced_inputs_are_required,
+    )
+
+    bad = {
+        "config": {
+            "request": {
+                "requestUrlTemplate": "https://x/y",
+                "requestTemplate": '{"comment": "$esc.jsonString("${input.comment}")"}',
+            }
+        },
+        "contract": {"input": {"inputSchema": {"required": ["identifier"]}}},
+    }
+
+    with pytest.raises(OptionalReferencedInput, match="comment"):
+        _assert_referenced_inputs_are_required(bad, "bad")
+
+
 def test_contracts_are_valid_json_on_disk() -> None:
     for action in ACTIONS:
         payload: dict[str, Any] = json.loads((CONTRACTS_DIR / f"{action.slug}.json").read_text())

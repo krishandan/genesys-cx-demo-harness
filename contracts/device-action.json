@@ -40,12 +40,13 @@
           },
           "params": {
             "type": "string",
-            "description": "Optional JSON object as a string, e.g. '{\"band\":\"5\"}'. Leave empty for the default behaviour."
+            "description": "JSON object as a string, e.g. '{\"band\":\"5\"}'. Pass an empty string for the default behaviour."
           }
         },
         "required": [
           "action",
           "identifier",
+          "params",
           "target"
         ],
         "additionalProperties": false
