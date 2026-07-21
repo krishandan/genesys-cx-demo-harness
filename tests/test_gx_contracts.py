@@ -112,12 +112,15 @@ def test_query_params_are_url_escaped(slug: str) -> None:
 
 
 @pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
-def test_get_actions_carry_no_request_body(slug: str) -> None:
-    definition = build_all()[slug]
-    request = definition["config"]["request"]
+def test_every_action_has_a_request_template(slug: str) -> None:
+    """requestTemplate is required for every request type, GET included: Genesys
+    validates it as required and rejects the import without it. A GET has no body, so
+    it passes ${input.rawRequest} through unchanged."""
+    request = build_all()[slug]["config"]["request"]
 
+    assert request["requestTemplate"]
     if request["requestType"] == "GET":
-        assert "requestTemplate" not in request
+        assert request["requestTemplate"] == "${input.rawRequest}"
 
 
 @pytest.mark.parametrize("slug", [a.slug for a in ACTIONS])
@@ -168,6 +171,27 @@ def test_generation_refuses_a_nested_output() -> None:
         from app.gx.contracts import build_action
 
         build_action(bad, "https://example.invalid")
+
+
+def test_committed_contracts_all_carry_a_request_template() -> None:
+    """The regression guard, on disk: the missing requestTemplate is what Genesys
+    rejected the import over ('missing the requesttemplate config request definition')."""
+    for action in ACTIONS:
+        committed = json.loads((CONTRACTS_DIR / f"{action.slug}.json").read_text())
+        assert committed["config"]["request"]["requestTemplate"], action.slug
+
+
+def test_generation_refuses_a_missing_request_template() -> None:
+    """A field Genesys validates as required must break the build, not surface at
+    import. build_action always emits requestTemplate, so this exercises the assertion
+    against a definition doctored to drop it."""
+    from app.gx.contracts import MissingRequiredContractField, _assert_genesys_required_fields
+
+    definition = build_all()["customer-context"]
+    del definition["config"]["request"]["requestTemplate"]
+
+    with pytest.raises(MissingRequiredContractField, match="requestTemplate"):
+        _assert_genesys_required_fields(definition, "customer-context")
 
 
 def test_contracts_are_valid_json_on_disk() -> None:

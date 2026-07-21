@@ -154,6 +154,12 @@ def _request_config(action: GxAction, base_url: str) -> dict[str, Any]:
         "requestUrlTemplate": url,
         "requestType": action.method,
         "headers": headers,
+        # requestTemplate is MANDATORY for every request type, GET included: Genesys
+        # validates it as required regardless of method and rejects the import without
+        # it ("missing the requesttemplate config request definition"). A GET has no
+        # body, so it passes the built-in ${input.rawRequest} through unchanged. A POST
+        # overrides this with the JSON body it builds below.
+        "requestTemplate": "${input.rawRequest}",
     }
 
     if action.body_fields:
@@ -171,8 +177,27 @@ def _request_config(action: GxAction, base_url: str) -> dict[str, Any]:
             parts.append(f'"{f}": {value}')
         request["requestTemplate"] = "{" + ",".join(parts) + "}"
 
-    # A GET has no body, so requestTemplate is spurious there and is left off entirely.
     return request
+
+
+class MissingRequiredContractField(ValueError):
+    """A generated contract lacks a field Genesys validates as required at import.
+
+    This class of bug — "Genesys requires a field we reasoned it didn't need" — must
+    break the build, not surface at import time. requestTemplate on a GET is the case
+    that taught us: it was dropped on the (wrong) reasoning that a GET has no body.
+    """
+
+
+def _assert_genesys_required_fields(definition: dict[str, Any], where: str) -> None:
+    request = definition.get("config", {}).get("request", {})
+    for field_name in ("requestUrlTemplate", "requestType", "requestTemplate"):
+        if not request.get(field_name):
+            raise MissingRequiredContractField(
+                f"{where}: config.request is missing '{field_name}'. Genesys validates "
+                f"it as required for every request type (GET included) and rejects the "
+                f"import without it."
+            )
 
 
 def build_action(action: GxAction, base_url: str) -> dict[str, Any]:
@@ -198,6 +223,8 @@ def build_action(action: GxAction, base_url: str) -> dict[str, Any]:
         },
     }
 
+    # Fail generation rather than shipping a contract Genesys would reject at import.
+    _assert_genesys_required_fields(definition, action.slug)
     # Fail generation rather than shipping a contract AVA would silently reject.
     validate_contract(definition, action.slug)
     return definition

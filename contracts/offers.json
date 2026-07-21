@@ -9,7 +9,8 @@
       "requestType": "GET",
       "headers": {
         "X-API-Key": "${credentials.apiKey}"
-      }
+      },
+      "requestTemplate": "${input.rawRequest}"
     },
     "response": {
       "translationMap": {},
