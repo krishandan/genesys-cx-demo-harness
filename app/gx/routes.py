@@ -38,6 +38,7 @@ from app.gx.schemas import (
 )
 from app.modules.network.actions import ACTION_HANDLERS, unknown_action
 from app.modules.network.config import network_config
+from app.modules.network.coverage import assess_coverage
 from app.modules.network.devices import describe_devices
 from app.modules.network.faults import NO_FAULT, build_verdict, detect_all
 from app.modules.network.service import Topology, load_topology
@@ -178,6 +179,8 @@ def _status_of(topology: Topology, tenant: Tenant, party_id: str) -> NetStatusOu
     verdict = build_verdict(topology, cfg)
     target_band = cfg["steer_target_band"]
     worst = min(topology.devices, key=lambda d: d.rssi) if topology.devices else None
+    # Durable, fault-independent coverage read — same computation offers keys off.
+    coverage = assess_coverage(topology, cfg)
 
     return NetStatusOut(
         found=True,
@@ -196,6 +199,10 @@ def _status_of(topology: Topology, tenant: Tenant, party_id: str) -> NetStatusOu
         worst_device_label=worst.label if worst else "",
         worst_device_band=worst.band if worst else "",
         worst_device_rssi=worst.rssi if worst else 0,
+        coverage=coverage.level,
+        coverage_note=coverage.note,
+        coverage_device_count=coverage.device_count,
+        coverage_worst_area=coverage.worst_area,
     )
 
 
@@ -469,13 +476,17 @@ def offers(
     if offer is None:
         return OffersOut(found=True, eligible=False)
 
+    # The offer keys off the coverage assessment, so the reason the customer hears is the
+    # same coverage note net-status reports — one signal, stated consistently. The pack
+    # reason is the fallback for an offer whose coverage note happens to be empty.
+    coverage = assess_coverage(topology, network_config(tenant))
     return OffersOut(
         found=True,
         eligible=True,
         offer_id=offer.offer_id,
         name=offer.name,
         price_gbp=offer.price_gbp,
-        reason=offer.reason,
+        reason=coverage.note or offer.reason,
     )
 
 

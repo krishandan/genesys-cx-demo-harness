@@ -31,6 +31,16 @@ tenant:
       # rebooting an extender drops it. This order is what makes the demo run
       # band-steer before reboot-extender.
       fault_precedence: [wan_degraded, device_band_stuck, extender_flapping]
+      # Coverage weakness thresholds (durable, fault-independent). The demo home reads
+      # "weak" because two devices upstairs (Ella's iPad and Work Laptop, both on the
+      # Upstairs Extender) sit below edge_rssi_5ghz_dbm — a cluster >= min_cluster_size.
+      # After a band-steer moves the iPad back to a strong signal, Work Laptop alone stays
+      # below single_worst_rssi_dbm, so coverage stays weak. Reboot does not move devices.
+      coverage:
+        edge_rssi_5ghz_dbm: -60
+        edge_rssi_24ghz_dbm: -68
+        min_cluster_size: 2
+        single_worst_rssi_dbm: -58
     # Shape of sent_to_masked in the order confirmation response.
     masked_email:
       reveal_chars: 1
@@ -47,15 +57,15 @@ tenant:
         - offer_id: NW-MESH-PRO
           name: Northwind Mesh Pro
           price_gbp: 6.0
+          # Fallback reason only; when coverage is weak the endpoint returns the live
+          # coverage_note instead, so the offer and net-status tell one story.
           reason: >-
-            it puts a second mesh point upstairs, where a device is currently hanging
-            on at the edge of the booster's range
+            a cluster of devices upstairs is hanging at the edge of the booster's range
           eligibility:
-            # A device hanging off a booster at a weak signal is a coverage gap. This
-            # is deliberately durable: rebooting the booster does not move a device's
-            # signal, so the offer survives the self-heal rather than vanishing the
-            # moment the immediate fault clears.
-            device_on_extender_rssi_at_or_below: -58
+            # Single source of truth: eligible exactly when the coverage assessment reads
+            # weak (app/modules/network/coverage.py). Durable — keyed off distance, not
+            # fault state — so the offer survives the self-heal.
+            coverage_is_weak: true
 
 seed:
   faker_seed: 20260716        # fixed → deterministic re-seed
@@ -128,16 +138,19 @@ seed:
             steer_eligible: true
           - key: ipad
             # The device wifi_degraded faults, so the customer's complaint and the
-            # diagnostic verdict name the same thing.
+            # diagnostic verdict name the same thing. At baseline it sits at the edge of
+            # the Upstairs Extender's range (below edge_rssi_5ghz_dbm), forming — with the
+            # Work Laptop — the >=2 device cluster that makes coverage read "weak".
             label: Ella's iPad
             kind: tablet
             ap: ext1
             band: "5"
-            rssi: -55
+            rssi: -62
             steer_eligible: true
           - key: laptop
-            # Sits at the edge of the booster's range even when healthy: this is the
-            # seeded coverage gap that makes the mesh offer genuinely applicable.
+            # Also on the Upstairs Extender at the edge of range, and NEVER touched by a
+            # fix. After a band-steer moves the iPad to a strong signal, this device alone
+            # keeps coverage "weak" (below single_worst_rssi_dbm) — the durable gap.
             label: Work Laptop
             kind: laptop
             ap: ext1
@@ -183,9 +196,11 @@ seed:
             rssi: -48
             steer_eligible: true
           - key: laptop
+            # Comfortably within range (well above the edge threshold), so a standard
+            # home reads coverage "good" and is NOT offer-eligible — a clean contrast.
             label: Work Laptop
             kind: laptop
             ap: ext1
             band: "5"
-            rssi: -55
+            rssi: -52
             steer_eligible: true

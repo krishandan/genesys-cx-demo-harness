@@ -174,7 +174,7 @@ def test_reset_restores_the_baseline(db: Session, northwind: Tenant) -> None:
     assert _fault(db, northwind) == NO_FAULT
     ipad = _ipad(db, northwind)
     assert ipad.band == "5"
-    assert ipad.rssi == -55  # the iPad's healthy baseline
+    assert ipad.rssi == -62  # the iPad's healthy baseline (edge of Upstairs Extender)
 
 
 def test_apply_is_idempotent(db: Session, northwind: Tenant) -> None:

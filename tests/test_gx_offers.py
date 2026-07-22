@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.models import Tenant
+from app.modules.network.config import network_config
 from app.modules.network.service import load_topology
 from app.modules.offers.service import (
     Offer,
@@ -41,8 +42,10 @@ def test_eligible_subscriber_gets_the_offer(
     assert body["offer_id"] == "NW-MESH-PRO"
     assert body["name"] == "Northwind Mesh Pro"
     assert body["price_gbp"] == 6.0
-    # The reason must be specific to this customer, not generic marketing.
-    assert "upstairs" in body["reason"]
+    # The reason is the live coverage note — specific to this customer, and identical to
+    # what net-status reports (single source of truth), not generic marketing.
+    assert "Upstairs Extender" in body["reason"]
+    assert "edge" in body["reason"]
 
 
 def test_the_response_is_flat(
@@ -148,9 +151,10 @@ def test_eligibility_is_evaluated_against_the_real_topology(
         return load_topology(db, northwind, party_id)
 
     offer = catalogue(northwind)[0]
+    cfg = network_config(northwind)
 
-    assert is_eligible(offer, topology_for(DEMO)) is True
-    assert is_eligible(offer, topology_for(NOT_ELIGIBLE)) is False
+    assert is_eligible(offer, topology_for(DEMO), cfg) is True
+    assert is_eligible(offer, topology_for(NOT_ELIGIBLE), cfg) is False
 
 
 def test_an_offer_with_no_conditions_is_always_eligible(
@@ -171,7 +175,7 @@ def test_an_offer_with_no_conditions_is_always_eligible(
         offer_id="X", name="X", price_gbp=1.0, reason="r", eta_text="e", eligibility={}
     )
 
-    assert is_eligible(unconditional, topology) is True
+    assert is_eligible(unconditional, topology, network_config(northwind)) is True
 
 
 def test_an_unknown_eligibility_rule_fails_loudly(
@@ -199,7 +203,7 @@ def test_an_unknown_eligibility_rule_fails_loudly(
     )
 
     with pytest.raises(UnknownEligibilityRule, match="unknown eligibility rule"):
-        is_eligible(typo, topology)
+        is_eligible(typo, topology, network_config(northwind))
 
 
 def test_best_offer_is_none_when_nothing_applies(

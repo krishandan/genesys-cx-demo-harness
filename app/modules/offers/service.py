@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.models import Tenant
+from app.modules.network.config import network_config
+from app.modules.network.coverage import assess_coverage
 from app.modules.network.models import AccessPoint, ConnectedDevice
 from app.modules.network.service import Topology
 
@@ -33,7 +35,9 @@ class UnknownEligibilityRule(KeyError):
     """A pack named a condition with no registered predicate."""
 
 
-Predicate = Callable[[Topology, Any], bool]
+# A predicate reads the topology and the network config (thresholds live in the pack, so
+# a coverage-based rule can resolve them). value is the pack-declared right-hand side.
+Predicate = Callable[[Topology, Any, dict[str, Any]], bool]
 
 PREDICATES: dict[str, Predicate] = {}
 
@@ -55,40 +59,49 @@ def _devices_on_extenders(topology: Topology) -> list[ConnectedDevice]:
     return [d for d in topology.devices if d.connected_ap_id in extender_ids]
 
 
-@predicate("device_on_extender_rssi_at_or_below")
-def _device_on_extender_rssi_at_or_below(topology: Topology, value: Any) -> bool:
-    """A device hanging off a booster is at the edge of its range.
+@predicate("coverage_is_weak")
+def _coverage_is_weak(topology: Topology, value: Any, cfg: dict[str, Any]) -> bool:
+    """The mesh offer's rule: eligible exactly when coverage is weak.
 
-    Deliberately durable: rebooting the booster does not move a device's signal, so this
-    stays true after a self-heal — the coverage gap is a property of the home, not of a
-    transient fault.
+    This is the SAME assessment net-status reports (app/modules/network/coverage.py), so
+    the offer and the readout can never disagree — one computation, two surfaces. Coverage
+    is durable (keyed off distance, not fault state), so the offer survives the self-heal.
     """
+    want_weak = bool(value)
+    return assess_coverage(topology, cfg).is_weak == want_weak
+
+
+@predicate("device_on_extender_rssi_at_or_below")
+def _device_on_extender_rssi_at_or_below(
+    topology: Topology, value: Any, cfg: dict[str, Any]
+) -> bool:
+    """A device hanging off a booster is at the edge of its range."""
     return any(d.rssi <= int(value) for d in _devices_on_extenders(topology))
 
 
 @predicate("any_device_rssi_at_or_below")
-def _any_device_rssi_at_or_below(topology: Topology, value: Any) -> bool:
+def _any_device_rssi_at_or_below(topology: Topology, value: Any, cfg: dict[str, Any]) -> bool:
     return any(d.rssi <= int(value) for d in topology.devices)
 
 
 @predicate("extender_backhaul_at_or_below")
-def _extender_backhaul_at_or_below(topology: Topology, value: Any) -> bool:
+def _extender_backhaul_at_or_below(topology: Topology, value: Any, cfg: dict[str, Any]) -> bool:
     return any(ap.backhaul_quality <= int(value) for ap in _extenders(topology))
 
 
 @predicate("extender_status_in")
-def _extender_status_in(topology: Topology, value: Any) -> bool:
+def _extender_status_in(topology: Topology, value: Any, cfg: dict[str, Any]) -> bool:
     wanted = {str(v) for v in value}
     return any(ap.status in wanted for ap in _extenders(topology))
 
 
 @predicate("min_extenders")
-def _min_extenders(topology: Topology, value: Any) -> bool:
+def _min_extenders(topology: Topology, value: Any, cfg: dict[str, Any]) -> bool:
     return len(_extenders(topology)) >= int(value)
 
 
 @predicate("min_devices")
-def _min_devices(topology: Topology, value: Any) -> bool:
+def _min_devices(topology: Topology, value: Any, cfg: dict[str, Any]) -> bool:
     return len(topology.devices) >= int(value)
 
 
@@ -117,8 +130,12 @@ def catalogue(tenant: Tenant) -> list[Offer]:
     return offers
 
 
-def is_eligible(offer: Offer, topology: Topology) -> bool:
-    """Every condition must hold. An offer with no conditions is always eligible."""
+def is_eligible(offer: Offer, topology: Topology, cfg: dict[str, Any]) -> bool:
+    """Every condition must hold. An offer with no conditions is always eligible.
+
+    `cfg` is the network config (`network_config(tenant)`); a coverage-based rule reads
+    its thresholds from there.
+    """
     for rule, value in offer.eligibility.items():
         check = PREDICATES.get(rule)
         if check is None:
@@ -126,15 +143,16 @@ def is_eligible(offer: Offer, topology: Topology) -> bool:
                 f"Offer '{offer.offer_id}' uses unknown eligibility rule '{rule}'. "
                 f"Known rules: {', '.join(sorted(PREDICATES))}"
             )
-        if not check(topology, value):
+        if not check(topology, value, cfg):
             return False
     return True
 
 
 def best_offer(tenant: Tenant, topology: Topology) -> Offer | None:
     """The single best eligible offer, or None. Pack order is priority."""
+    cfg = network_config(tenant)
     for offer in catalogue(tenant):
-        if is_eligible(offer, topology):
+        if is_eligible(offer, topology, cfg):
             return offer
     return None
 

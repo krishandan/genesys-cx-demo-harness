@@ -197,6 +197,38 @@ class NetStatusOut(BaseModel):
     worst_device_rssi: int = Field(
         default=0, description="Signal of the weakest device in dBm; below -70 is poor."
     )
+    coverage: str = Field(
+        default="good",
+        description=(
+            "Whether the home has a structural coverage weakness: good or weak. This is "
+            "SEPARATE from fault_type — a home can have fault_type none and still have "
+            "weak coverage. A reboot or band-steer does NOT fix weak coverage; only "
+            "additional equipment (a mesh point) does. Use this to recommend an upgrade "
+            "as a fact, never as a fix for the current fault."
+        ),
+    )
+    coverage_note: str = Field(
+        default="",
+        description=(
+            "Plain-English, speakable summary of the coverage weakness, e.g. \"Two "
+            "devices are hanging at the edge of the Upstairs Extender's range.\" Empty "
+            "when coverage is good. Say this to explain why a mesh upgrade would help."
+        ),
+    )
+    coverage_device_count: int = Field(
+        default=0,
+        description=(
+            "How many devices are sitting at the edge of range. 0 when coverage is good. "
+            "This does not change when a fault is fixed — it is about distance, not faults."
+        ),
+    )
+    coverage_worst_area: str = Field(
+        default="",
+        description=(
+            "Where the weak coverage is, e.g. \"Upstairs Extender\". Empty when coverage "
+            "is good. Use it to tell the customer which part of the home needs a mesh point."
+        ),
+    )
 
 
 class DeviceActionIn(BaseModel):
