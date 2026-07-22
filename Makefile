@@ -69,6 +69,9 @@ demo-be4: ## Run the BE-4 events + CSAT + telemetry walkthrough
 demo-be5: ## Run the BE-5 Demo-1 backend arc
 	./scripts/demo_be5.sh
 
+demo-be6: ## Run the BE-6 coverage-vs-fault walkthrough
+	./scripts/demo_be6.sh
+
 venv: ## Create the host venv used by test/lint/typecheck
 	uv venv --python 3.12 .venv
 	uv pip install --python .venv/bin/python -e ".[dev]"

@@ -6,7 +6,10 @@ Every field name, type and `required` flag below is taken from the generated con
 `contracts/*.json`. Every response was **verified by calling the running API** (local
 `http://localhost:8000`, Northwind seed) on 2026-07-21, resetting to the seeded baseline
 between captures. Where a value is quoted as a response, it came back from a real call —
-not from the phase briefs.
+not from the phase briefs. **BE-6 (2026-07-22): the net-status `coverage*` fields and the
+durability tables were verified live; the demo home's baseline `worst_device` shifted to
+Ella's iPad at −62 dBm (it now anchors the coverage cluster), and `/gx/offers.reason` is now
+the live `coverage_note`.**
 
 Do not hand-edit this file to match an assumption; regenerate the facts by re-running the
 calls shown here.
@@ -175,10 +178,13 @@ customer *names*. **Top-level array** of flat objects. Unknown/no-network → `[
 
 | label | band | rssi | status_summary |
 | --- | --- | --- | --- |
+| Ella's iPad | 5 | −62 | good signal on the faster band |
 | Work Laptop | 5 | −61 | good signal on the faster band |
-| Ella's iPad | 5 | −55 | good signal on the faster band |
 | Living Room TV | 5 | −52 | good signal on the faster band |
 | Anne's Phone | 5 | −48 | good signal on the faster band |
+
+(Ella's iPad and Work Laptop both sit on the Upstairs Extender below the −60 dBm edge
+threshold — the durable coverage cluster; see `/gx/net-status` coverage fields.)
 
 **Under `wifi_degraded`** (verified) — Ella's iPad drops to the front:
 
@@ -222,11 +228,12 @@ The flat fault verdict. AVA branches on `fault_type` and acts on `primary_target
 ```json
 { "found": true, "party_id": "dde8cc6c-…", "fault_type": "none", "primary_target": "",
   "primary_target_kind": "", "primary_target_label": "", "recommended_action": "none",
-  "wan_ok": true, "worst_device_band": "5", "worst_device_rssi": -61, "extender_status": "online" }
+  "wan_ok": true, "worst_device_band": "5", "worst_device_rssi": -62, "extender_status": "online" }
 ```
 
-> Note: at healthy baseline `worst_device_*` is the weakest **healthy** device (Work Laptop,
-> −61), *not* a fault. "worst" means weakest, not faulty — branch on `fault_type`.
+> Note: at healthy baseline `worst_device_*` is the weakest **healthy** device (Ella's iPad,
+> −62), *not* a fault. "worst" means weakest, not faulty — branch on `fault_type`. (The
+> home still has weak *coverage* here — see net-status §5 — but that is not a fault.)
 
 **Under `wifi_degraded`** — verified:
 
@@ -245,6 +252,9 @@ The flat fault verdict. AVA branches on `fault_type` and acts on `primary_target
   "primary_target_label": "Upstairs Extender", "recommended_action": "reboot-extender",
   "wan_ok": true, "worst_device_band": "5", "worst_device_rssi": -61, "extender_status": "flapping" }
 ```
+
+(After band-steer, Ella's iPad is back on 5GHz at −56, so Work Laptop at −61 is again the
+weakest device.)
 
 **Fault precedence** (config, least-disruptive-remedy-first):
 `wan_degraded` → `device_band_stuck` → `extender_flapping`. Two faults are staged at once;
@@ -278,16 +288,36 @@ Current full network state, for confirming recovery after an action.
 | `extender_status` | string | `online` | `flapping` |
 | `device_total` | integer | `4` | `4` |
 | `devices_on_target_band` | integer | `4` | `3` |
-| `worst_device_label` | string | `Work Laptop` | `Ella's iPad` |
+| `worst_device_label` | string | `Ella's iPad` | `Ella's iPad` |
 | `worst_device_band` | string | `5` | `2.4` |
-| `worst_device_rssi` | integer | `-61` | `-78` |
+| `worst_device_rssi` | integer | `-62` | `-78` |
+| `coverage` | string | `weak` | `weak` |
+| `coverage_note` | string | `Two devices are hanging at the edge of the Upstairs Extender's range.` | same |
+| `coverage_device_count` | integer | `2` | `2` |
+| `coverage_worst_area` | string | `Upstairs Extender` | `Upstairs Extender` |
+
+**Coverage is a DURABLE, fault-independent signal** (BE-6). It is a structural property of
+the home — a cluster of devices at the edge of a booster's range — that **no repair fixes**.
+Verified across the whole self-heal:
+
+| state | `fault_type` | `coverage` | `coverage_device_count` |
+| --- | --- | --- | --- |
+| healthy baseline | `none` | `weak` | `2` |
+| under `wifi_degraded` | `device_band_stuck` | `weak` | `2` |
+| after `band-steer` | `extender_flapping` | `weak` | `1` (Work Laptop alone) |
+| after `reboot-extender` | `none` | `weak` | `1` |
+
+So a home can be **`healthy: true` and `coverage: weak` at the same time**. After every fault
+is fixed, coverage stays `weak` — that is the grounded basis for the mesh upsell.
 
 **After the full self-heal** (band-steer → reboot-extender) — verified:
 `healthy: true`, `fault_type: none`, `ap_online: 2/2`, `extender_status: online`,
-`devices_on_target_band: 4/4`.
+`devices_on_target_band: 4/4`, **`coverage: weak`, `coverage_worst_area: Upstairs Extender`**.
 
 > `devices_on_target_band` = count of devices on the **5GHz** band (the configured target
 > band), not a list. `worst_device_*` at baseline is the weakest healthy device, not a fault.
+> `coverage` is separate from `fault_type`: a reboot or band-steer never changes it — only a
+> mesh point would. Thresholds are pack config (`config_json.network.coverage`).
 
 ---
 
@@ -357,15 +387,22 @@ The single best upgrade the subscriber's own topology justifies. `eligible: fals
 | `offer_id` | string | pass to `order-action` `place` as `target` |
 | `name` | string | `Northwind Mesh Pro` |
 | `price_gbp` | **number** | `6.0` (a float, not an integer) |
-| `reason` | string | customer-specific justification |
+| `reason` | string | the **live coverage note** — identical to `net-status.coverage_note` (BE-6, single source of truth), not static marketing |
+
+Eligibility is the **same coverage assessment** net-status reports: `eligible` is true
+exactly when `net-status.coverage == "weak"`. The mesh offer keys off the durable coverage
+gap, so it is eligible at baseline **and** after the full self-heal.
 
 **Eligible** (demo subscriber, verified — eligible at baseline *and* after the self-heal):
 
 ```json
 { "found": true, "eligible": true, "offer_id": "NW-MESH-PRO", "name": "Northwind Mesh Pro",
   "price_gbp": 6.0,
-  "reason": "it puts a second mesh point upstairs, where a device is currently hanging on at the edge of the booster's range" }
+  "reason": "Two devices are hanging at the edge of the Upstairs Extender's range." }
 ```
+
+(After a band-steer the reason becomes the singular "A device is hanging at the edge of the
+Upstairs Extender's range." — it always matches `net-status.coverage_note`.)
 
 **Not eligible** — a healthy standard home (`+447700900001`, verified):
 `{ "found": true, "eligible": false, "offer_id": "", "name": "", "price_gbp": 0.0, "reason": "" }`
@@ -525,8 +562,8 @@ staged — operator applies `wifi_degraded`; between takes, `/admin/scenario/res
 | 5 | `POST device-action` | `action=band-steer`, `target=963286b0-…`, `params=""` | `ok:true`, `fault_cleared:true` | — |
 | 6 | `GET net-diagnostics` (again) | `identifier=+447700900000` | `fault_type:extender_flapping`, `primary_target:3b2dbbf3-…` (kind `ap`), `recommended_action:reboot-extender` | **`primary_target` → step 7 `target`** |
 | 7 | `POST device-action` | `action=reboot-extender`, `target=3b2dbbf3-…`, `params=""` | `ok:true`, `fault_cleared:true` | — |
-| 8 | `GET net-status` | `identifier=+447700900000` | `healthy:true`, `fault_type:none`, `ap_online:2`, `devices_on_target_band:4` | confirms recovery to the customer |
-| 9 | `GET offers` | `identifier=+447700900000` | `eligible:true`, `offer_id:NW-MESH-PRO`, `price_gbp:6.0`, `reason:"…"` | **`offer_id` → step 10 `target`** |
+| 8 | `GET net-status` | `identifier=+447700900000` | `healthy:true`, `fault_type:none`, `ap_online:2`, `devices_on_target_band:4`, **`coverage:weak`, `coverage_note:"…"`** | confirms recovery, AND surfaces the durable coverage gap as a fact |
+| 9 | `GET offers` | `identifier=+447700900000` | `eligible:true`, `offer_id:NW-MESH-PRO`, `price_gbp:6.0`, `reason` = step 8's `coverage_note` | **`offer_id` → step 10 `target`** |
 | 10 | `POST order-action` | `action=place`, `target=NW-MESH-PRO`, `params=""` | `ok:true`, `order_id:<uuid>`, `status:placed` | **`order_id` → step 11 `target`** |
 | 11 | `POST order-action` | `action=send-confirmation`, `target=<order_id>`, `params=""` | `sent_to_masked:"a••••@example.net"`, `message_ref:MSG-…` | — |
 | 12 | `POST csat` | `score=5`, `comment=""`, `conversation_ref=<conv id or "">` | `ok:true`, `stored:true` | — |
@@ -534,6 +571,11 @@ staged — operator applies `wifi_degraded`; between takes, `/admin/scenario/res
 Two chaining points are the whole game and are easy to get wrong:
 1. **`net-diagnostics.primary_target` → `device-action.target`** — the opaque id, not the label.
 2. **`offers.offer_id` → `order-action(place).target` → `order-action(send-confirmation).target = order_id`** — the `target` field changes meaning between the two order verbs.
+
+The upsell (steps 8–9) is **grounded in coverage, not the fault**: state
+`net-status.coverage_note` as a fact ("two devices upstairs are at the edge of the booster's
+range"), *after* the faults are fixed. Do not pitch the mesh point as a fix for the fault —
+`net-status.coverage` stays `weak` precisely because a repair does not move devices closer.
 
 (Optional: `POST interaction-event` at the start of the conversation to set `last_channel`.)
 
@@ -557,7 +599,11 @@ Flags for whoever writes the AVA tool instructions:
 5. **`id_type_resolved` is populated even when `found:false`** (a garbage string classifies as
    `account_no`). Use `found` for existence, not this field.
 6. **`worst_device_*` (net-diagnostics, net-status) means *weakest*, not *faulty*.** At healthy
-   baseline it is the weakest healthy device (−61 dBm). Branch on `fault_type` / `healthy`.
+   baseline it is the weakest healthy device (−62 dBm, Ella's iPad). Branch on `fault_type` / `healthy`.
+6a. **`net-status.coverage` is NOT `fault_type`.** A home can be `healthy: true` (no fault) and
+   `coverage: weak` at the same time. Coverage is a durable structural gap a repair never fixes;
+   `fault_type` is the transient problem the verbs fix. Recommend the mesh upgrade off `coverage`,
+   never as a fix for a fault.
 7. **`net-status.devices_on_target_band` is a count on the 5GHz band, not a list**, and "target
    band" is the configured fast band (`5`), which the field name assumes you know.
 8. **`offers.price_gbp` is a `number` (float), e.g. `6.0`** — not an integer, and not a
